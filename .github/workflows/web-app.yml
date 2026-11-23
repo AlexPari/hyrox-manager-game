@@ -1,0 +1,60 @@
+# Builds the Expo app for the web and publishes it with GitHub Pages at /hyrox-manager-game/app/.
+# Runs when the app or the game logic changes on main. The build is committed into docs/app (Pages serves docs/).
+name: Publish web app
+
+on:
+  push:
+    branches: [main]
+    paths: ["app/**", "sim/**", ".github/workflows/web-app.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: web-app
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Test the game logic
+        run: |
+          npm install --no-audit --no-fund
+          npm run typecheck
+          npm test
+
+      - name: Build the web app
+        working-directory: app
+        run: |
+          npm install --no-audit --no-fund
+          npx tsc --noEmit
+          npx expo export -p web
+
+      - name: Copy the build into docs/app
+        run: |
+          rm -rf docs/app
+          cp -r app/dist docs/app
+          # Expo puts the code in an "_expo" folder: tell GitHub Pages not to run Jekyll, which hides "_" folders.
+          touch docs/.nojekyll
+          # Reloading a screen URL (e.g. /app/training) lands on the site 404 page: send it back to the app.
+          cat > docs/404.html <<'HTML'
+          <!doctype html><meta charset="utf-8"><title>Hyrox Manager</title>
+          <script>var p = location.pathname; location.replace(p.indexOf("/hyrox-manager-game/app/") === 0 ? "/hyrox-manager-game/app/" : "/hyrox-manager-game/");</script>
+          HTML
+
+      - name: Commit the build
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs
+          if git diff --cached --quiet; then echo "No changes to publish"; exit 0; fi
+          git commit -m "Publish web app build"
+          git push
