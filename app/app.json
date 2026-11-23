@@ -32,6 +32,11 @@
     "experiments": {
       "typedRoutes": true,
       "baseUrl": "/hyrox-manager-game/app"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "f33c9bd0-bcc4-4df2-baf3-e17abf3928dc"
+      }
     }
   }
 }
