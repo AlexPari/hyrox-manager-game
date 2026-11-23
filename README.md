@@ -13,15 +13,18 @@ docs/    GitHub Pages: economy simulator (v1 model) at the root, web build of th
 
 ## App (`app/`)
 
-First playable slice: **Home → Training → Race → Report**, in the design system's dark theme (Barlow Condensed + Inter).
+All the mockup screens, in the design system's dark theme (Barlow Condensed + Inter):
 
-- **Home**: energy and wallet, athlete card (overall, fatigue, fit/knock/injured), next race, live ranking with the distance to the cut, last season.
-- **Training**: coach's plan (one tap), training block with the OVR each one would add, intensity with fatigue and knock risk, station bars with this week's gains; on race weeks, race or skip, pacing and expected time.
-- **Race**: playback in Hyrox order (8 runs and 8 stations) with a running clock and live position, skippable.
-- **Report**: place, time, gap to the winner, prize, ranking points, splits, training gains, knocks and injuries, and the season result when a season ends.
-- **Saves**: the career is saved on the device after every action and restored on launch. Energy regenerates in real time while the app is closed. "Skip 12 h (test)" on Home lets time pass for testing.
+- **Onboarding**: name your athlete and pick a country.
+- **Hub**: next race with readiness ring, coach's suggestion for the week, road to Elite 15 (rank, cut line, best 5), daily missions and ads, tab bar (Athlete, Calendar, Rankings, Wall, Pass, Shop), Continue.
+- **Training**: readiness on race day, training booster, coach's plan, training block, intensity, station gains.
+- **Race day**: race or skip, readiness, expected place, physio / fast heal, ice bath, link to the **pacing plan** (Safe / Even / Attack with predicted time and place, coach call, gear).
+- **Race** playback, then the **new patch**, then the **race report**.
+- **Season recap** in 4 steps: patches and stats, final ranking and outcome, earnings, next season and unlocks.
+- **Calendar** (results, skipped, next, upcoming with points and prizes), **Rankings** (best 5, cut line, full field), **Athlete** (condition, stats radar, staff hiring and upgrades, training base, gear, personal bests, rename or new career), **Shop** (VIP, pass, gems, coins, energy, boosts, equipment, training base, camps), **Season pass** (40 tiers, premium, vault), **Wall of fame** and **full wall** (patches, performance patches, finish-time chart, trophies, timeline, countries).
+- **Saves**: the career and its race history are saved on the device after every action. Energy regenerates in real time. "Skip 12 h (test)" on the hub lets time pass. Real-money purchases are simulated in this test build.
 
-Not in this slice yet: staff, shop, season pass screen, gems boosts, onboarding, settings.
+Training and pacing follow the v2 rules (blocks, intensity, 3 pacing modes), not the per-session slots and per-segment sliders of the early mockups.
 
 ### Try it
 
