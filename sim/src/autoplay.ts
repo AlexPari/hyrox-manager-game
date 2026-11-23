@@ -1,6 +1,8 @@
+import { bestFocus } from "./athlete";
+import type { Intensity, Pacing } from "./config";
 import {
-  advanceTime, buyCamp, buyFacility, divisionConfig, downgradeStaff, energyPerWeek, isWorldsWeek, physio,
-  playWeek, raceIndexForWeek, releaseStaff, salaryPerWeek, seasonConfig, upgradeStaff, watchAd,
+  advanceTime, buyCamp, buyFacility, cutInfo, divisionConfig, downgradeStaff, effects, energyPerWeek, isWorldsWeek, ovr,
+  physio, playWeek, raceIndexForWeek, releaseStaff, salaryPerWeek, seasonConfig, upgradeStaff, watchAd, type WeekChoices,
 } from "./game";
 import { random } from "./rng";
 import type { GameEvent, GameState } from "./types";
@@ -17,13 +19,42 @@ export interface PlayerProfile {
   raceRate: number;
   /** Follows the reference staff, facility and camp plan from the config. */
   followPlan: boolean;
+  /** "smart" picks the best training block, manages fatigue and pacing. "autopilot" keeps the defaults. */
+  decisions: "smart" | "autopilot";
 }
 
-export const profiles: Record<"casual" | "active" | "hardcore", PlayerProfile> = {
-  casual: { id: "casual", label: "Casual · free", sessionsPerDay: 1, coinAdsPerDay: 1, energyAdsPerDay: 0, raceRate: 0.5, followPlan: false },
-  active: { id: "active", label: "Active · free", sessionsPerDay: 2, coinAdsPerDay: 3, energyAdsPerDay: 2, raceRate: 0.75, followPlan: true },
-  hardcore: { id: "hardcore", label: "Hardcore · free", sessionsPerDay: 2, coinAdsPerDay: 3, energyAdsPerDay: 3, raceRate: 1, followPlan: true },
+export const profiles: Record<"casual" | "autopilot" | "active" | "hardcore", PlayerProfile> = {
+  casual: { id: "casual", label: "Casual · free", sessionsPerDay: 1, coinAdsPerDay: 1, energyAdsPerDay: 0, raceRate: 0.5, followPlan: true, decisions: "autopilot" },
+  autopilot: { id: "autopilot", label: "Active · autopilot", sessionsPerDay: 2, coinAdsPerDay: 3, energyAdsPerDay: 2, raceRate: 0.75, followPlan: true, decisions: "autopilot" },
+  active: { id: "active", label: "Active · free", sessionsPerDay: 2, coinAdsPerDay: 3, energyAdsPerDay: 2, raceRate: 0.75, followPlan: true, decisions: "smart" },
+  hardcore: { id: "hardcore", label: "Hardcore · free", sessionsPerDay: 2, coinAdsPerDay: 3, energyAdsPerDay: 3, raceRate: 1, followPlan: true, decisions: "smart" },
 };
+
+/** The week's choices a profile would make. Exported so the app can offer a "Recommended" button. */
+export function decideWeek(s: GameState, profile: PlayerProfile, wantsRace: boolean): WeekChoices {
+  const next = s.week + 1;
+  const raceWeek = raceIndexForWeek(s, next) > 0;
+  const worlds = isWorldsWeek(s, next);
+  if (profile.decisions === "autopilot") {
+    const intensity: Intensity = s.fatigue >= 50 || s.status !== "fit" ? "light" : "normal";
+    return { race: wantsRace, focus: "balanced", intensity, pacing: "even" };
+  }
+  // Smart: skip ordinary races when knocked or very tired, taper before the World Championships.
+  const race = wantsRace && (worlds || (s.status === "fit" && s.fatigue < 45));
+  const worldsNext = isWorldsWeek(s, next + 1);
+  let intensity: Intensity = "normal";
+  if (s.status !== "fit" || s.fatigue >= 35 || worldsNext || worlds) intensity = "light";
+  else if (s.fatigue <= 12 && !(raceWeek && race)) intensity = "hard";
+  const fx = effects(s);
+  const focus = bestFocus(s.config, s.stats, { intensity, age: s.age, effects: fx, mult: 1 });
+  let pacing: Pacing = "even";
+  if (s.status === "knock") pacing = "conservative";
+  else if (worlds) {
+    const best = Math.max(...s.field.rivals.map((r) => r.level));
+    pacing = ovr(s) < best ? "aggressive" : "even";
+  } else if (s.division === "Pro" && s.week > seasonConfig(s).weeks * 0.6 && cutInfo(s).gap < 0) pacing = "aggressive";
+  return { race, focus, intensity, pacing };
+}
 
 function applyPlan(s: GameState): void {
   const c = s.config;
@@ -91,8 +122,8 @@ export function autoPlay(s: GameState, profile: PlayerProfile, until: "season" |
     const next = s.week + 1;
     const raceIndex = raceIndexForWeek(s, next);
     const canAfford = s.coins - salaryPerWeek(s) >= divisionConfig(s).entryFee + s.config.coins.travelPerRaceAbroad;
-    const race = raceIndex > 0 && s.status !== "injured" && (isWorldsWeek(s, next) || random(s) < profile.raceRate) && canAfford;
-    const r = playWeek(s, { race });
+    const wantsRace = raceIndex > 0 && s.status !== "injured" && (isWorldsWeek(s, next) || random(s) < profile.raceRate) && canAfford;
+    const r = playWeek(s, decideWeek(s, profile, wantsRace));
     if (r.ok) events.push(...r.events);
     else {
       const t = advanceTime(s, 12, 2);
