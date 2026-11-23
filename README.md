@@ -26,7 +26,7 @@ Not in this slice yet: staff, shop, season pass screen, gems boosts, onboarding,
 ### Try it
 
 - **Web, on any phone**: **https://alexpari.github.io/hyrox-manager-game/app/** (on iPhone: Safari → Share → Add to Home Screen). Rebuilt automatically by `.github/workflows/web-app.yml` whenever `app/` or `sim/` changes on main.
-- **Native, in Expo Go, no computer needed**: `.github/workflows/expo-go.yml` publishes the app to Expo (EAS Update) whenever `app/` or `sim/` changes on main. On the iPhone, sign in to Expo Go with the Expo account that owns the `EXPO_TOKEN` secret and open **Hyrox Manager** from the Home tab. Expo Go only opens projects owned by the signed-in account, and it must match the app's SDK (58).
+- **Native, in Expo Go, no computer needed**: `app/.eas/workflows/publish-expo-go.yml` runs on Expo's servers (the repo is connected to the Expo project `@alexparis-team/hyrox-manager`, base directory `app`) and publishes the app with EAS Update on every push to main that changes `app/` or `sim/`. On the iPhone, sign in to Expo Go with an account that belongs to `alexparis-team` and open **Hyrox Manager** from the Home tab. Expo Go must match the app's SDK (58).
 - **Native, from your computer** (live reload while coding):
 
 ```bash

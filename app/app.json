@@ -2,6 +2,7 @@
   "expo": {
     "name": "Hyrox Manager",
     "slug": "hyrox-manager",
+    "owner": "alexparis-team",
     "version": "0.1.0",
     "runtimeVersion": {
       "policy": "appVersion"
