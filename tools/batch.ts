@@ -10,7 +10,7 @@ function arg(name: string, fallback: string): string {
 
 const runs = Number(arg("runs", "300"));
 const seed = Number(arg("seed", "1"));
-const chosen = arg("profiles", "casual,active,hardcore").split(",") as Array<keyof typeof profiles>;
+const chosen = arg("profiles", "casual,autopilot,active,hardcore").split(",") as Array<keyof typeof profiles>;
 
 const pct = (xs: number[], p: number) => {
   if (!xs.length) return NaN;
@@ -77,6 +77,13 @@ for (const key of chosen) {
   console.log(`  Lowest season-end coins  median ${fmt(pct(careers.map((c) => c.lowestSeasonEndCoins), 50))}`);
   const line = Array.from({ length: 15 }, (_, i) => fmt(pct(careers.map((c) => c.seasons[i]?.coins ?? NaN).filter(Number.isFinite), 50)));
   console.log(`  Median coins by season   ${line.join(" | ")}`);
+  const ovrLine = Array.from({ length: 15 }, (_, i) => pct(careers.map((c) => c.seasons[i]?.ovr ?? NaN).filter(Number.isFinite), 50).toFixed(1));
+  console.log(`  Median OVR by season     ${ovrLine.join(" | ")}`);
+  const divLine = Array.from({ length: 15 }, (_, i) => {
+    const n = careers.filter((c) => c.seasons[i]?.division === "Elite 15").length;
+    return `${Math.round((n / careers.length) * 100)}%`;
+  });
+  console.log(`  In Elite 15 by season    ${divLine.join(" | ")}`);
 }
 
 writeFileSync("tools/out/careers.csv", careerRows.join("\n"));

@@ -1,4 +1,7 @@
-import { defaultConfig, type Config, type DivisionConfig, type SeasonConfig } from "./config";
+import {
+  declinePerWeek, knockChanceFor, nextFatigue, overall, raceDay, startingStats, timeForRating, trainingGains, type Stats,
+} from "./athlete";
+import { STAT_IDS, defaultConfig, type Config, type DivisionConfig, type Effects, type Intensity, type Pacing, type SeasonConfig, type TrainingFocus } from "./config";
 import { gauss, random, seedFrom } from "./rng";
 import type { ActionResult, CurrentSeason, ErrorCode, GameEvent, GameState, SeasonOutcome, SeasonRecord } from "./types";
 
@@ -54,13 +57,25 @@ export function salaryPerWeek(s: GameState): number {
   return s.staff.reduce((t, tier, i) => t + (tier ? s.config.staff[i].salary[tier - 1] : 0), 0);
 }
 
-function staffValue(s: GameState, index: number): number {
-  const tier = s.staff[index];
-  return tier ? s.config.staff[index].values[tier - 1] : 0;
+/** Sum of every effect from hired staff and owned facilities. */
+export function effects(s: GameState): Effects {
+  const out: Effects = {};
+  const add = (k: keyof Effects, v: number) => (out[k] = (out[k] ?? 0) + v);
+  s.config.staff.forEach((role, i) => {
+    const tier = s.staff[i];
+    if (!tier) return;
+    for (const [k, vals] of Object.entries(role.effects)) add(k as keyof Effects, vals![tier - 1]);
+  });
+  s.config.facilities.forEach((f, i) => {
+    if (!s.facilities[i]) return;
+    for (const [k, v] of Object.entries(f.effects)) add(k as keyof Effects, v!);
+  });
+  return out;
 }
 
-function staffEffectSum(s: GameState, effect: "trainingGains" | "knockChance" | "raceDay"): number {
-  return s.config.staff.reduce((t, role, i) => t + (role.effect === effect ? staffValue(s, i) : 0), 0);
+/** Overall rating of the athlete. */
+export function ovr(s: GameState): number {
+  return overall(s.config, s.stats);
 }
 
 export function gearBonus(s: GameState): number {
@@ -80,17 +95,14 @@ function bestOf(c: Config, results: number[]): number {
   return [...results].sort((a, b) => b - a).slice(0, c.ranking.bestOf).reduce((t, v) => t + v, 0);
 }
 
-function baseGainForAge(c: Config, age: number): number {
-  for (const g of c.athlete.gainPerWeek) if (age <= g.toAge) return g.gain;
-  return 0;
+/** This week's knock chance at the current fatigue. */
+export function knockChance(s: GameState): number {
+  return knockChanceFor(s.config, s.fatigue, effects(s));
 }
 
-export function knockChance(s: GameState): number {
-  let k = s.config.injury.knockChance * (1 + staffEffectSum(s, "knockChance"));
-  s.config.facilities.forEach((f, i) => {
-    if (s.facilities[i] && f.knock) k *= 1 + f.knock;
-  });
-  return Math.max(0, k);
+/** Rivals' race-day randomness, matched to the player's (shared noise + averaged segment noise). */
+function rivalNoise(c: Config): number {
+  return Math.hypot(c.race.noise, c.race.segmentNoise * 0.55);
 }
 
 export interface Standings {
@@ -140,14 +152,15 @@ function createField(s: GameState): void {
 export function newGame(seed: number, config: Config = defaultConfig): GameState {
   const c = clone(config);
   const s: GameState = {
-    version: 1,
+    version: 2,
     config: c,
     rng: seedFrom(seed),
     season: 1,
     week: 0,
     day: 0,
     age: c.athlete.startAge,
-    ovr: c.athlete.startOvr,
+    stats: {} as Stats,
+    fatigue: 0,
     energy: c.energy.cap,
     coins: c.coins.start,
     gems: c.gems.start,
@@ -173,6 +186,7 @@ export function newGame(seed: number, config: Config = defaultConfig): GameState
     seasons: [],
     ended: false,
   };
+  s.stats = startingStats(c, s);
   s.abroadRoll = random(s);
   createField(s);
   return s;
@@ -257,8 +271,17 @@ export function advanceTime(s: GameState, hours: 12 | 24, sessions: 1 | 2 = 2): 
 export interface WeekChoices {
   /** Enter this week's race (ignored on training weeks). */
   race: boolean;
+  /** Training block. Default "balanced" (autopilot). */
+  focus?: TrainingFocus;
+  /** Default "normal". Light recovers, hard builds faster but tires. */
+  intensity?: Intensity;
+  /** Race plan. Default "even". */
+  pacing?: Pacing;
+  /** Gems: +50% training gains this week. */
   booster?: boolean;
+  /** Gems, race weeks: removes fatigue before the race. */
   iceBath?: boolean;
+  /** Gems, race weeks: small race-day bonus. */
   coachCall?: boolean;
 }
 
@@ -287,18 +310,27 @@ export function playWeek(s: GameState, choice: WeekChoices): ActionResult {
   s.gems -= gemCost;
   s.week = week;
   s.weeksPlayedToday++;
+  const fx = effects(s);
+  const intensity: Intensity = s.status === "injured" ? "light" : choice.intensity ?? "normal";
+  const focus: TrainingFocus = choice.focus ?? "balanced";
 
   // Training
-  let gain = baseGainForAge(c, s.age);
-  let mult = 1 + staffEffectSum(s, "trainingGains");
-  c.facilities.forEach((f, i) => {
-    if (s.facilities[i] && f.gains) mult += f.gains;
-  });
-  if (gain > 0) gain *= mult * (choice.booster ? c.boosts.boosterMult : 1) * (s.campWeeksLeft > 0 ? c.camps.altitude.mult : 1);
-  else gain *= 1 - (mult - 1) / 2; // staff and facilities slow the decline
-  s.ovr += gain;
+  let mult = (choice.booster ? c.boosts.boosterMult : 1) * (s.campWeeksLeft > 0 ? c.camps.altitude.mult : 1);
+  if (racing) mult *= c.training.raceWeekGains;
+  if (s.status === "knock") mult *= c.injury.knockGains;
+  if (s.status === "injured") mult = 0;
+  const gains = trainingGains(c, s.stats, { focus, intensity, age: s.age, effects: fx, mult });
+  const before = ovr(s);
+  const decline = declinePerWeek(c, s.age, fx);
+  for (const id of STAT_IDS) s.stats[id] = Math.max(0, Math.min(100, s.stats[id] + (gains[id] ?? 0) - decline));
   if (s.campWeeksLeft > 0) s.campWeeksLeft--;
-  if (s.status === "injured") {
+  if (racing && choice.iceBath) s.fatigue = Math.max(0, s.fatigue - c.boosts.iceBathFatigue);
+  const raceFatigue = s.fatigue; // the race is run on the fatigue carried into the week
+  s.fatigue = nextFatigue(c, s.fatigue, intensity, racing, fx);
+  ev.push({ type: "trained", focus, intensity, gains, ovrGain: ovr(s) - before, fatigue: s.fatigue });
+
+  const wasStatus = s.status;
+  if (s.status !== "fit") {
     s.injuryWeeksLeft--;
     if (s.injuryWeeksLeft <= 0) {
       s.status = "fit";
@@ -309,45 +341,53 @@ export function playWeek(s: GameState, choice: WeekChoices): ActionResult {
   if (racing) {
     s.coins -= fee + travel;
     const worlds = isWorldsWeek(s, week);
-    const score =
-      s.ovr + gearBonus(s) + staffEffectSum(s, "raceDay") +
-      (choice.iceBath ? c.boosts.iceBathBonus : 0) + (choice.coachCall ? c.boosts.coachCallBonus : 0) +
-      (worlds && s.heatCampBooked ? c.camps.heat.raceBonus : 0) - (s.status === "knock" ? c.injury.knockPenalty : 0) +
-      gauss(s) * c.raceNoise;
-    const place = runRace(s, score)!;
-    const prize = Math.round(prizeForPlace(c, place) * d.prizeMult * (worlds ? c.prizes.worldsMult : 1));
+    const pacing: Pacing = choice.pacing ?? "even";
+    const offset =
+      gearBonus(s) + (fx.raceDay ?? 0) + (choice.coachCall ? c.boosts.coachCallBonus : 0) +
+      (worlds && s.heatCampBooked ? c.camps.heat.raceBonus : 0) - (wasStatus === "knock" ? c.injury.knockPenalty : 0) -
+      raceFatigue * c.fatigue.racePenaltyPerPoint;
+    const day = raceDay(c, s, { stats: s.stats, offset, pacing, effects: fx });
+    const { place, winnerRating } = runRace(s, day.rating);
+    const prize = Math.round(prizeForPlace(c, place!) * d.prizeMult * (worlds ? c.prizes.worldsMult : 1));
     s.coins += prize;
     let xp = 0;
     if (s.pass.active) {
       const X = c.pass.raceXp;
-      xp = place === 1 ? X.win : place <= 3 ? X.top3 : place <= 8 ? X.top8 : X.finish;
+      xp = place === 1 ? X.win : place! <= 3 ? X.top3 : place! <= 8 ? X.top8 : X.finish;
       s.pass.xp += xp;
     }
     const cs = s.current;
     cs.races++;
     cs.prizes += prize;
     if (place === 1) cs.wins++;
-    if (place <= 3) cs.podiums++;
-    cs.best = cs.best === null ? place : Math.min(cs.best, place);
+    if (place! <= 3) cs.podiums++;
+    cs.best = cs.best === null ? place : Math.min(cs.best, place!);
     if (worlds) {
       cs.worlds = place;
       s.heatCampBooked = false;
     }
     const city = worlds ? "World Championships" : c.raceCities[(s.season * 7 + raceIndex) % c.raceCities.length];
-    ev.push({ type: "race", season: s.season, week, raceIndex, city, worlds, abroad, place, fieldSize: d.size, prize, xp, travel });
+    const winnerSec = place === 1 ? day.timeSec : Math.round(timeForRating(c, winnerRating));
+    ev.push({
+      type: "race", season: s.season, week, raceIndex, city, worlds, abroad, place: place!, fieldSize: d.size, prize, xp, travel,
+      pacing, blewUp: day.blewUp, timeSec: day.timeSec, winnerSec, splits: day.splits,
+    });
     if (xp) grantTiers(s, ev);
     if (worlds && place === 1) ev.push({ type: "worldChampion", age: s.age });
-    if (s.status === "knock" && random(s) < c.injury.injuryIfRacingKnocked) {
-      s.status = "injured";
-      s.injuryWeeksLeft = c.injury.injuryWeeks;
-      ev.push({ type: "injured", weeks: c.injury.injuryWeeks });
-    } else if (s.status === "fit" && random(s) < knockChance(s)) {
-      s.status = "knock";
-      ev.push({ type: "knock" });
-    }
   } else if (raceIndex > 0) {
     runRace(s, null); // rivals still race and score ranking points
     ev.push({ type: "raceSkipped", raceIndex });
+  }
+
+  // Knocks come from fatigue. Racing or training hard on a knock can turn it into an injury.
+  if (wasStatus === "knock" && s.status === "knock" && (racing || intensity === "hard") && random(s) < c.injury.injuryIfStrained) {
+    s.status = "injured";
+    s.injuryWeeksLeft = c.injury.injuryWeeks;
+    ev.push({ type: "injured", weeks: c.injury.injuryWeeks });
+  } else if (s.status === "fit" && wasStatus === "fit" && random(s) < knockChanceFor(c, s.fatigue, fx)) {
+    s.status = "knock";
+    s.injuryWeeksLeft = c.injury.knockWeeks;
+    ev.push({ type: "knock" });
   }
 
   s.abroadRoll = random(s);
@@ -355,9 +395,9 @@ export function playWeek(s: GameState, choice: WeekChoices): ActionResult {
   return done(ev);
 }
 
-/** Runs one race for the persistent field. Returns the player's place, or null if the player didn't race. */
-function runRace(s: GameState, myScore: number | null): number | null {
-  const n = s.config.raceNoise;
+/** Runs one race for the persistent field. Returns the player's place (null if the player didn't race) and the winning rating. */
+function runRace(s: GameState, myScore: number | null): { place: number | null; winnerRating: number } {
+  const n = rivalNoise(s.config);
   const perf: Array<{ i: number; v: number }> = s.field.rivals.map((r, i) => ({ i, v: r.level + gauss(s) * n }));
   if (myScore !== null) perf.push({ i: -1, v: myScore });
   perf.sort((a, b) => b.v - a.v);
@@ -369,7 +409,7 @@ function runRace(s: GameState, myScore: number | null): number | null {
       s.field.mine.push(pts);
     } else s.field.rivals[x.i].points.push(pts);
   });
-  return mine;
+  return { place: mine, winnerRating: perf[0].v };
 }
 
 function endSeason(s: GameState, ev: GameEvent[]): void {
@@ -398,7 +438,7 @@ function endSeason(s: GameState, ev: GameEvent[]): void {
     season: s.season, age: s.age, phase: z.phase, division: s.division, rank: st.rank, fieldSize: st.fieldSize,
     points: st.points, outcome, gapToCut: ci.gap, nextDivision: next, realDays: +(s.day - cs.startDay).toFixed(1),
     races: cs.races, wins: cs.wins, podiums: cs.podiums, best: cs.best, worlds: cs.worlds, prizes: cs.prizes, bonus,
-    coins: Math.round(s.coins), gems: Math.round(s.gems), ovr: +s.ovr.toFixed(1), usd: +s.usd.toFixed(2),
+    coins: Math.round(s.coins), gems: Math.round(s.gems), ovr: +ovr(s).toFixed(1), usd: +s.usd.toFixed(2),
   };
   s.seasons.push(record);
   ev.push({ type: "seasonEnd", record });
@@ -414,6 +454,7 @@ function endSeason(s: GameState, ev: GameEvent[]): void {
     return;
   }
   s.current = newCurrentSeason(s.day);
+  s.fatigue = 0; // off-season rest
   createField(s);
   if (s.season >= s.config.pass.unlockSeason && !s.pass.active) startPass(s, ev);
 }
@@ -514,6 +555,7 @@ export function physio(s: GameState): ActionResult {
   if (s.coins < s.config.coins.physio) return fail("notEnoughCoins");
   s.coins -= s.config.coins.physio;
   s.status = "fit";
+  s.injuryWeeksLeft = 0;
   return done();
 }
 
