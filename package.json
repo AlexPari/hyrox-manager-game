@@ -1,14 +1,15 @@
 {
   "name": "hyrox-manager-game",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Hyrox Manager: career management game. Game logic (sim), balancing tools and app.",
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "batch": "tsx tools/batch.ts"
+    "batch": "tsx tools/batch.ts",
+    "tune": "tsx tools/tune.ts"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",

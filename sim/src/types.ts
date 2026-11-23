@@ -1,4 +1,5 @@
-import type { Config, DivisionName } from "./config";
+import type { Stats, Split } from "./athlete";
+import type { Config, DivisionName, Intensity, Pacing, TrainingFocus } from "./config";
 
 export type Status = "fit" | "knock" | "injured";
 
@@ -65,7 +66,7 @@ export interface CurrentSeason {
 
 /** The whole game is one plain JSON object: easy to save, sync and migrate. */
 export interface GameState {
-  version: 1;
+  version: 2;
   config: Config;
   /** Seeded random generator state: the same seed and actions replay the same career. */
   rng: number;
@@ -75,7 +76,10 @@ export interface GameState {
   /** Real days elapsed since the career started (half-day steps). */
   day: number;
   age: number;
-  ovr: number;
+  /** Station stats (0-100). The overall rating is derived from them, see overall(). */
+  stats: Stats;
+  /** 0-100. Rises with hard training and races, falls with recovery. Costs race performance and raises the knock chance. */
+  fatigue: number;
   energy: number;
   coins: number;
   gems: number;
@@ -90,6 +94,7 @@ export interface GameState {
   campWeeksLeft: number;
   heatCampBooked: boolean;
   status: Status;
+  /** Weeks until a knock or an injury clears on its own. */
   injuryWeeksLeft: number;
   adsCoinsToday: number;
   adsEnergyToday: number;
@@ -105,7 +110,12 @@ export interface GameState {
 }
 
 export type GameEvent =
-  | { type: "race"; season: number; week: number; raceIndex: number; city: string; worlds: boolean; abroad: boolean; place: number; fieldSize: number; prize: number; xp: number; travel: number }
+  | { type: "trained"; focus: TrainingFocus; intensity: Intensity; gains: Partial<Stats>; ovrGain: number; fatigue: number }
+  | {
+      type: "race"; season: number; week: number; raceIndex: number; city: string; worlds: boolean; abroad: boolean;
+      place: number; fieldSize: number; prize: number; xp: number; travel: number;
+      pacing: Pacing; blewUp: boolean; timeSec: number; winnerSec: number; splits: Split[];
+    }
   | { type: "raceSkipped"; raceIndex: number }
   | { type: "worldChampion"; age: number }
   | { type: "knock" }
