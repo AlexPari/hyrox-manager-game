@@ -1,3 +1,5 @@
 node_modules/
+# The web build in docs/ keeps its font files in an assets/node_modules folder: publish them.
+!docs/**/node_modules/
 tools/out/
 .DS_Store

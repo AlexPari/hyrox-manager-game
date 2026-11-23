@@ -8,7 +8,7 @@ import { GameProvider } from "@/game/store";
 import { color } from "@/theme";
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     BarlowCondensed_600SemiBold,
     BarlowCondensed_700Bold,
     Inter_400Regular,
@@ -16,7 +16,8 @@ export default function RootLayout() {
     Inter_600SemiBold,
     Inter_700Bold,
   });
-  if (!fontsLoaded) return null;
+  // If the fonts can't load (offline, missing file), start anyway with the system fonts rather than a blank screen.
+  if (!fontsLoaded && !fontError) return null;
   return (
     <SafeAreaProvider>
       <StatusBar style="light" />
