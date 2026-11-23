@@ -1,0 +1,16 @@
+# Publishes the app with EAS Update so it opens in Expo Go, no computer or native build needed.
+# Runs on Expo's servers (the GitHub repo is connected to the Expo project, base directory "app").
+# On the iPhone: sign in to Expo Go with an account in alexparis-team, then open Hyrox Manager from the Home tab.
+name: Publish to Expo Go
+
+on:
+  push:
+    branches: ['main']
+    paths: ['app/**', 'sim/**']
+
+jobs:
+  publish:
+    name: Publish update
+    type: update
+    params:
+      branch: main
