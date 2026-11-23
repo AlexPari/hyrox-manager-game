@@ -7,9 +7,34 @@ A mobile career management game about Hyrox: build an athlete from age 21, plan 
 ```
 sim/     game logic only (no UI): athlete model, races, economy, ranking, qualification, season pass, saves
 tools/   balancing tools (batch simulation of thousands of careers, quick tuning loop)
-docs/    playable economy simulator web app, served by GitHub Pages (still on the v1 race model)
-app/     (next) Expo / React Native app for iOS and Android, built on sim/
+app/     Expo / React Native app for iOS, Android and web, built on sim/
+docs/    GitHub Pages: economy simulator (v1 model) at the root, web build of the app in docs/app
 ```
+
+## App (`app/`)
+
+First playable slice: **Home → Training → Race → Report**, in the design system's dark theme (Barlow Condensed + Inter).
+
+- **Home**: energy and wallet, athlete card (overall, fatigue, fit/knock/injured), next race, live ranking with the distance to the cut, last season.
+- **Training**: coach's plan (one tap), training block with the OVR each one would add, intensity with fatigue and knock risk, station bars with this week's gains; on race weeks, race or skip, pacing and expected time.
+- **Race**: playback in Hyrox order (8 runs and 8 stations) with a running clock and live position, skippable.
+- **Report**: place, time, gap to the winner, prize, ranking points, splits, training gains, knocks and injuries, and the season result when a season ends.
+- **Saves**: the career is saved on the device after every action and restored on launch. Energy regenerates in real time while the app is closed. "Skip 12 h (test)" on Home lets time pass for testing.
+
+Not in this slice yet: staff, shop, season pass screen, gems boosts, onboarding, settings.
+
+### Try it
+
+- **Web, on any phone**: **https://alexpari.github.io/hyrox-manager-game/app/** (on iPhone: Safari → Share → Add to Home Screen). Rebuilt automatically by `.github/workflows/web-app.yml` whenever `app/` or `sim/` changes on main.
+- **Native, with Expo Go** (install Expo Go from the App Store, then on your computer):
+
+```bash
+cd app
+npm install
+npx expo start      # scan the QR code with the iPhone camera
+```
+
+The app imports the game logic straight from `../sim` (see `app/metro.config.js`), so there is one copy of the rules.
 
 ## Game logic (`sim/`)
 

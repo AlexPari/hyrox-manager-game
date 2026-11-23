@@ -53,6 +53,19 @@ export function isWorldsWeek(s: GameState, week: number): boolean {
   return s.division === "Elite 15" && raceIndexForWeek(s, week) === seasonConfig(s).races;
 }
 
+/** City of the race held in the given week of the current season ("World Championships" for the Elite 15 final). */
+export function raceCity(s: GameState, week: number): string {
+  if (isWorldsWeek(s, week)) return "World Championships";
+  const c = s.config;
+  return c.raceCities[(s.season * 7 + raceIndexForWeek(s, week)) % c.raceCities.length];
+}
+
+/** Weeks until the next race (1 = the coming week), or null if no race is left this season. */
+export function weeksToNextRace(s: GameState): number | null {
+  for (let w = s.week + 1; w <= seasonConfig(s).weeks; w++) if (raceIndexForWeek(s, w) > 0) return w - s.week;
+  return null;
+}
+
 export function salaryPerWeek(s: GameState): number {
   return s.staff.reduce((t, tier, i) => t + (tier ? s.config.staff[i].salary[tier - 1] : 0), 0);
 }
@@ -266,6 +279,29 @@ export function advanceTime(s: GameState, hours: 12 | 24, sessions: 1 | 2 = 2): 
   return done(ev);
 }
 
+/**
+ * Real-time clock for the app: energy regenerates continuously (up to the cap) and each real day crossed closes the
+ * day (pass missions, daily ad limits, VIP gems). Use this with wall-clock time; auto-play uses advanceTime.
+ */
+export function advanceRealTime(s: GameState, hours: number): ActionResult {
+  const ev: GameEvent[] = [];
+  if (!(hours > 0)) return done(ev);
+  const regen = (s.config.energy.regenPerDay * hours) / 24;
+  s.energy = Math.max(s.energy, Math.min(energyCap(s), s.energy + regen));
+  const before = s.day;
+  s.day = before + hours / 24;
+  for (let k = Math.floor(before) + 1; k <= Math.floor(s.day); k++) endOfDay(s, ev);
+  return done(ev);
+}
+
+/** Minutes until the next whole energy point (0 when at or above the cap). */
+export function minutesToNextEnergy(s: GameState): number {
+  if (s.energy >= energyCap(s)) return 0;
+  const perMinute = s.config.energy.regenPerDay / 1440;
+  const missing = Math.ceil(s.energy + 1e-9) - s.energy || 1;
+  return Math.ceil(missing / perMinute);
+}
+
 // ---------------------------------------------------------------- the week
 
 export interface WeekChoices {
@@ -366,7 +402,7 @@ export function playWeek(s: GameState, choice: WeekChoices): ActionResult {
       cs.worlds = place;
       s.heatCampBooked = false;
     }
-    const city = worlds ? "World Championships" : c.raceCities[(s.season * 7 + raceIndex) % c.raceCities.length];
+    const city = raceCity(s, week);
     const winnerSec = place === 1 ? day.timeSec : Math.round(timeForRating(c, winnerRating));
     ev.push({
       type: "race", season: s.season, week, raceIndex, city, worlds, abroad, place: place!, fieldSize: d.size, prize, xp, travel,
