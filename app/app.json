@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "Hyrox Manager",
+    "slug": "hyrox-manager",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "hyroxmanager",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0F1217",
+    "ios": {
+      "supportsTablet": false
+    },
+    "android": {
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "single",
+      "bundler": "metro",
+      "name": "Hyrox Manager",
+      "shortName": "Hyrox",
+      "themeColor": "#0F1217",
+      "backgroundColor": "#0F1217"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "baseUrl": "/hyrox-manager-game/app"
+    }
+  }
+}

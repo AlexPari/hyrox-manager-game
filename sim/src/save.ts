@@ -17,7 +17,7 @@ const migrations: Record<number, (save: AnySave) => AnySave> = {
     const stats = Object.fromEntries(STAT_IDS.map((id) => [id, ovr]));
     const injuryWeeksLeft = rest.status === "knock" ? defaultConfig.injury.knockWeeks : rest.injuryWeeksLeft;
     // v1 saves always used the default config; the v2 defaults add the new model's numbers.
-    return { ...rest, version: 2, config: structuredClone(defaultConfig), stats, fatigue: 0, injuryWeeksLeft };
+    return { ...rest, version: 2, config: JSON.parse(JSON.stringify(defaultConfig)), stats, fatigue: 0, injuryWeeksLeft };
   },
 };
 

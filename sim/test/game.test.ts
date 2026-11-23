@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  advanceTime, autoPlay, buyPassPremium, defaultConfig, deserialize, energyPerWeek, fastHeal, isStaffLocked,
+  advanceRealTime, advanceTime, autoPlay, buyPassPremium, minutesToNextEnergy, defaultConfig, deserialize, energyPerWeek, fastHeal, isStaffLocked,
   newGame, physio, playWeek, profiles, raceIndexForWeek, serialize, upgradeStaff, type GameState,
 } from "../src";
 
@@ -200,5 +200,20 @@ describe("career", () => {
       expect(s.seasons).toHaveLength(15);
       expect(s.seasons.at(-1)!.age).toBe(35);
     }
+  });
+});
+
+describe("real-time clock (app)", () => {
+  it("regenerates energy continuously up to the cap and closes each real day", () => {
+    const s = newGame(20);
+    s.energy = 0;
+    advanceRealTime(s, 1);
+    expect(s.energy).toBeCloseTo(defaultConfig.energy.regenPerDay / 24, 6);
+    expect(minutesToNextEnergy(s)).toBeGreaterThan(0);
+    s.adsCoinsToday = 3;
+    advanceRealTime(s, 30);
+    expect(s.energy).toBe(defaultConfig.energy.cap);
+    expect(minutesToNextEnergy(s)).toBe(0);
+    expect(s.adsCoinsToday).toBe(0); // a new day started
   });
 });
