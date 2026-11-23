@@ -1,6 +1,7 @@
+import { STAT_IDS, defaultConfig } from "./config";
 import type { GameState } from "./types";
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 /** Saves are plain JSON. Each future format change adds a migration step below so old saves keep working. */
 export function serialize(s: GameState): string {
@@ -10,8 +11,14 @@ export function serialize(s: GameState): string {
 type AnySave = { version?: number } & Record<string, unknown>;
 
 const migrations: Record<number, (save: AnySave) => AnySave> = {
-  // Example for the next format change:
-  // 1: (save) => ({ ...save, version: 2, newField: defaultValue }),
+  // v1 -> v2: a single overall rating becomes station stats; fatigue and knock duration are added.
+  1: (save) => {
+    const { ovr, ...rest } = save as AnySave & { ovr: number; status: string; injuryWeeksLeft: number };
+    const stats = Object.fromEntries(STAT_IDS.map((id) => [id, ovr]));
+    const injuryWeeksLeft = rest.status === "knock" ? defaultConfig.injury.knockWeeks : rest.injuryWeeksLeft;
+    // v1 saves always used the default config; the v2 defaults add the new model's numbers.
+    return { ...rest, version: 2, config: structuredClone(defaultConfig), stats, fatigue: 0, injuryWeeksLeft };
+  },
 };
 
 export function deserialize(text: string): GameState {
