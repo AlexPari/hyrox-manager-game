@@ -3,6 +3,9 @@
     "name": "Hyrox Manager",
     "slug": "hyrox-manager",
     "version": "0.1.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "orientation": "portrait",
     "scheme": "hyroxmanager",
     "userInterfaceStyle": "dark",
