@@ -4,4 +4,5 @@ export * from "./athlete";
 export * from "./game";
 export * from "./autoplay";
 export * from "./save";
+export * from "./view";
 export { random, gauss } from "./rng";

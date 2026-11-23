@@ -1,4 +1,5 @@
 import type { Stats, Split } from "./athlete";
+import type { AthleteProfile, RaceLogEntry } from "./view";
 import type { Config, DivisionName, Intensity, Pacing, TrainingFocus } from "./config";
 
 export type Status = "fit" | "knock" | "injured";
@@ -107,6 +108,10 @@ export interface GameState {
   current: CurrentSeason;
   seasons: SeasonRecord[];
   ended: boolean;
+  /** Name and country chosen at the start of the career (set by the app; optional for older saves). */
+  profile?: AthleteProfile;
+  /** Every finished race (filled by recordWeek; optional for older saves). */
+  raceLog?: RaceLogEntry[];
 }
 
 export type GameEvent =

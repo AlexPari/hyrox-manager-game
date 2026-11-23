@@ -1,54 +1,61 @@
-import { router } from "expo-router";
-import { Alert, Platform, View } from "react-native";
-import { cutInfo, energyPerWeek, ovr, raceCity, seasonConfig, weeksToNextRace, type GameState } from "@sim";
-import { ATHLETE, Hud } from "@/components/Hud";
-import { Bar, Button, Card, Chip, Divider, Label, Row, Screen, T } from "@/components/ui";
+import { Redirect, router } from "expo-router";
+import { Pressable, StyleSheet, View } from "react-native";
+import { cutInfo, decideWeek, effects, energyPerWeek, ovrGain, profileOf, profiles, readiness, seasonConfig, seasonRaces } from "@sim";
+import { Hud } from "@/components/Hud";
+import { Icon } from "@/components/Icon";
+import { Ring } from "@/components/Ring";
+import { TabBar } from "@/components/TabBar";
+import { Button, Card, Chip, Divider, Label, Row, Screen, T } from "@/components/ui";
+import { flag, placeOf } from "@/data/places";
 import { useGame } from "@/game/store";
-import { num, ordinal, outcomeTitle, signed } from "@/format";
-import { color, fatigueColor, space } from "@/theme";
+import { focusInfo, intensityInfo, ordinal, signed } from "@/format";
+import { color, space } from "@/theme";
 
-function confirm(message: string, onYes: () => void) {
-  if (Platform.OS === "web") {
-    // eslint-disable-next-line no-alert
-    if (globalThis.confirm?.(message)) onYes();
-    return;
-  }
-  Alert.alert("New career", message, [
-    { text: "Cancel", style: "cancel" },
-    { text: "Start over", style: "destructive", onPress: onYes },
-  ]);
-}
-
-function statusChip(s: GameState) {
-  if (s.status === "injured") return <Chip fg={color.dangerText} bg={color.dangerTint}>{`Injured · ${s.injuryWeeksLeft} wk`}</Chip>;
-  if (s.status === "knock") return <Chip fg={color.warning} bg={color.warningTint}>{`Knock · ${s.injuryWeeksLeft} wk`}</Chip>;
-  return (
-    <Chip fg={color.success} bg={color.successTint}>
-      Fit
-    </Chip>
-  );
-}
-
-export default function Home() {
-  const { s, watchAd, skipHours, newCareer } = useGame();
-
+export default function Hub() {
+  const { s, watchAd, skipHours, recapPending } = useGame();
+  if (!s.profile) return <Redirect href="/onboarding" />;
+  if (recapPending) return <Redirect href="/recap" />;
   if (s.ended) return <CareerOver />;
 
+  const c = s.config;
   const z = seasonConfig(s);
   const need = energyPerWeek(s);
   const enough = s.energy >= need;
-  const toRace = weeksToNextRace(s);
-  const raceWeek = toRace === null ? null : s.week + toRace;
+  const next = seasonRaces(s).find((r) => r.status === "next");
+  const inWeeks = next ? next.week - s.week : 0;
+  const where = next ? placeOf(next.city) : null;
+  const coach = decideWeek(s, profiles.active, true);
+  const focus = coach.focus ?? "balanced";
+  const intensity = coach.intensity ?? "normal";
+  const gain = ovrGain(c, s.stats, { focus, intensity, age: s.age, effects: effects(s), mult: 1 });
   const ci = cutInfo(s);
   const st = ci.standings;
+  const inZone = !ci.cut || ci.gap >= 0;
+  const scored = Math.min(s.field.mine.length, c.ranking.bestOf);
+  const adsLeft = c.coins.adCoinsMaxPerDay - s.adsCoinsToday;
+  const played = Math.min(s.weeksPlayedToday, 2);
+
+  const roadTitle = s.division === "Pro" ? "Road to Elite 15" : s.division === "Elite 15" ? "Elite 15 · keep your spot" : "Rookie season · Open";
+  const roadText = !ci.cut
+    ? "Everyone turns Pro at the end of the season. Race to learn and earn."
+    : s.division === "Pro"
+      ? ci.gap >= 0
+        ? `Top ${ci.cut} are invited to Elite 15. You're ${ci.gap} pts clear.`
+        : `Top ${ci.cut} are invited to Elite 15. ${-ci.gap} pts to go.`
+      : ci.gap >= 0
+        ? `Top ${ci.cut} keep their spot. You're ${ci.gap} pts clear.`
+        : `Bottom 3 go back to Pro. ${-ci.gap} pts to safety.`;
+  const pos = st.fieldSize > 1 ? (st.rank - 1) / (st.fieldSize - 1) : 0;
+  const cutPos = ci.cut && st.fieldSize > 1 ? (ci.cut - 0.5) / (st.fieldSize - 1) : 0;
 
   return (
     <Screen
       footer={
         <>
+          <TabBar badges={{ Athlete: s.status !== "fit" ? true : undefined, Calendar: inWeeks === 1 ? true : undefined }} />
           <Button
             hero
-            label={enough ? (toRace === 1 ? "Plan race week" : "Plan week") : "Not enough energy"}
+            label={enough ? "Continue" : "Not enough energy"}
             sub={enough ? `Week ${s.week + 1} · uses ${need} energy` : `Needs ${need} · you have ${Math.floor(s.energy)}`}
             disabled={!enough}
             onPress={() => router.push("/training")}
@@ -60,7 +67,7 @@ export default function Home() {
                   variant="secondary"
                   icon="tv"
                   label="Ad +5 energy"
-                  disabled={s.adsEnergyToday >= s.config.energy.adEnergyMaxPerDay}
+                  disabled={s.adsEnergyToday >= c.energy.adEnergyMaxPerDay}
                   onPress={() => watchAd("energy")}
                 />
               </View>
@@ -74,121 +81,149 @@ export default function Home() {
     >
       <Hud />
 
-      <View style={{ gap: 2 }}>
-        <Label>{`Season ${s.season} · ${z.phase}`}</Label>
-        <T variant="h1">{`Week ${Math.min(s.week + 1, z.weeks)} of ${z.weeks}`}</T>
-      </View>
+      <Card tint={next?.worlds ? color.trophyTint : undefined}>
+        <Row style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+          <View style={{ flex: 1, gap: 6 }}>
+            <Label>{`Week ${Math.min(s.week + 1, z.weeks)} of ${z.weeks} · Season ${s.season}`}</Label>
+            {next ? (
+              <Chip fg={color.accentInk} bg={color.accent}>
+                {next.worlds ? "World Championships" : `Next race · ${s.division}`}
+              </Chip>
+            ) : null}
+            <T variant="displayTitle" numberOfLines={1}>
+              {next ? (next.worlds ? "Worlds" : next.city) : "Season done"}
+            </T>
+            <T variant="bodyStrong" style={{ color: inWeeks === 1 ? color.accent : color.ink2 }}>
+              {next ? (inWeeks === 1 ? "This week" : `In ${inWeeks} weeks · week ${next.week}`) : "No race left this season"}
+            </T>
+          </View>
+          <View style={{ alignItems: "center", gap: 4 }}>
+            <Ring value={readiness(s)} size={92} />
+            <Label>Readiness</Label>
+          </View>
+        </Row>
+        {where ? (
+          <Row style={{ justifyContent: "space-between" }}>
+            <T variant="meta" tone="ink2">{`${flag(where.country)}  ${where.countryName}${where.region ? `, ${where.region}` : ""}`}</T>
+            {inWeeks === 1 ? (
+              <Pressable accessibilityRole="button" onPress={() => router.push("/pacing")} hitSlop={10}>
+                <T variant="bodyStrong" tone="accent">
+                  {"Pacing plan ›"}
+                </T>
+              </Pressable>
+            ) : null}
+          </Row>
+        ) : null}
+      </Card>
+
+      <Pressable accessibilityRole="button" onPress={() => router.push("/training")}>
+        <Card>
+          <Row style={{ justifyContent: "space-between" }}>
+            <Label>{`Week ${s.week + 1} · Training`}</Label>
+            <T variant="bodyStrong" tone="warning">
+              {"Plan ›"}
+            </T>
+          </Row>
+          <T variant="bodyStrong">{`Coach suggests: ${focusInfo[focus].label} · ${intensityInfo[intensity].label}`}</T>
+          <T variant="meta" tone="muted">{`About ${signed(gain, 2)} overall · fatigue ${Math.round(s.fatigue)}%`}</T>
+        </Card>
+      </Pressable>
+
+      <Pressable accessibilityRole="button" onPress={() => router.push("/rankings")}>
+        <Card>
+          <Row style={{ justifyContent: "space-between" }}>
+            <Label>{roadTitle}</Label>
+            {ci.cut ? (
+              <Row gap={4}>
+                <Icon name={inZone ? "check" : "info"} size={14} color={inZone ? color.success : color.warning} />
+                <T variant="small" style={{ color: inZone ? color.success : color.warning }}>
+                  {inZone ? (s.division === "Pro" ? "Qualified zone" : "Safe zone") : "Below the cut"}
+                </T>
+              </Row>
+            ) : null}
+          </Row>
+          <T variant="meta" tone="muted">
+            {roadText}
+          </T>
+          {st.points ? (
+            <View style={styles.track}>
+              <View style={styles.line} />
+              {ci.cut ? <View style={[styles.cut, { left: `${cutPos * 100}%` }]} /> : null}
+              <View style={[styles.dot, { left: `${pos * 100}%`, backgroundColor: inZone ? color.success : color.warning }]} />
+            </View>
+          ) : null}
+          <Row style={{ justifyContent: "space-between" }}>
+            <Row gap={5}>
+              <T variant="small" tone="muted">
+                Best 5
+              </T>
+              {Array.from({ length: c.ranking.bestOf }, (_, i) => (
+                <View key={i} style={[styles.slot, i < scored ? styles.slotOn : null]} />
+              ))}
+              <T variant="bodyStrong">{` ${st.points} pts`}</T>
+            </Row>
+            <T variant="meta" tone="muted">
+              {st.points ? `${ordinal(st.rank)} of ${st.fieldSize}` : "No points yet"}
+            </T>
+          </Row>
+        </Card>
+      </Pressable>
 
       <Card>
         <Row style={{ justifyContent: "space-between" }}>
-          <View style={{ gap: 4 }}>
-            <T variant="h2">{`${ATHLETE.first} ${ATHLETE.last}`}</T>
-            <Row gap={6}>
-              <Chip fg={color.accent} bg={color.accentTint}>
-                {s.division}
-              </Chip>
-              {statusChip(s)}
-              <T variant="meta" tone="muted">{`Age ${s.age}`}</T>
-            </Row>
+          <Label>Missions</Label>
+          <T variant="small" tone="muted">
+            Reset every day
+          </T>
+        </Row>
+        <Row style={{ justifyContent: "space-between" }}>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Chip>Daily</Chip>
+            <T variant="bodyStrong">Play 2 weeks today</T>
+            <T variant="caption" tone="muted">
+              {s.pass.active ? `+${c.pass.missionXpPerDay} season pass XP` : "Gives pass XP from season 2"}
+            </T>
           </View>
-          <View style={{ alignItems: "flex-end" }}>
-            <T variant="numberL">{ovr(s).toFixed(1)}</T>
-            <Label>Overall</Label>
-          </View>
+          {played >= 2 ? (
+            <Chip fg={color.success} bg={color.successTint}>
+              Done
+            </Chip>
+          ) : (
+            <T variant="numberM">{`${played}/2`}</T>
+          )}
         </Row>
         <Divider />
-        <View style={{ gap: 6 }}>
-          <Row style={{ justifyContent: "space-between" }}>
-            <Label>Fatigue</Label>
-            <T variant="bodyStrong" style={{ color: fatigueColor(s.fatigue) }}>{`${Math.round(s.fatigue)}%`}</T>
-          </Row>
-          <Bar value={s.fatigue} fill={fatigueColor(s.fatigue)} />
-          <T variant="caption" tone="muted">
-            {s.fatigue >= 35 ? "Tired: slower races and more knocks. Plan a light week." : "Fresh enough to train hard or race."}
-          </T>
-        </View>
-      </Card>
-
-      <Card>
-        <Label>Next race</Label>
-        {raceWeek ? (
-          <Row style={{ justifyContent: "space-between" }}>
-            <View style={{ gap: 2, flex: 1 }}>
-              <T variant="bodyStrong">{raceCity(s, raceWeek)}</T>
-              <T variant="meta" tone="muted">
-                {toRace === 1 ? "This coming week" : `In ${toRace} weeks · week ${raceWeek}`}
-              </T>
-            </View>
-            <Chip fg={toRace === 1 ? color.accentInk : color.ink2} bg={toRace === 1 ? color.accent : color.surface3}>
-              {toRace === 1 ? "Race week" : `${toRace} wk`}
-            </Chip>
-          </Row>
-        ) : (
-          <T variant="meta" tone="muted">
-            No race left this season.
-          </T>
-        )}
-      </Card>
-
-      <Card>
         <Row style={{ justifyContent: "space-between" }}>
-          <Label>{`${s.division} ranking · best ${s.config.ranking.bestOf}`}</Label>
-          <T variant="meta" tone="muted">{`${num(st.points)} pts`}</T>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Chip>Sponsor ad</Chip>
+            <T variant="bodyStrong">Watch an ad</T>
+            <T variant="caption" tone="muted">{`+${c.coins.adCoins} coins · ${adsLeft} of ${c.coins.adCoinsMaxPerDay} left today`}</T>
+          </View>
+          <View style={{ width: 104 }}>
+            <Button variant="secondary" icon="tv" label="Free" disabled={adsLeft <= 0} onPress={() => watchAd("coins")} />
+          </View>
         </Row>
-        <Row style={{ alignItems: "flex-end" }} gap={6}>
-          <T variant="numberL">{st.points ? ordinal(st.rank) : "–"}</T>
-          <T variant="meta" tone="muted" style={{ marginBottom: 3 }}>{`of ${st.fieldSize}`}</T>
-        </Row>
-        {ci.cut ? (
-          <T variant="caption" style={{ color: ci.gap >= 0 ? color.success : color.warning }}>
-            {s.division === "Pro"
-              ? ci.gap >= 0
-                ? `Inside the top ${ci.cut}: Elite 15 invitation (${signed(ci.gap, 0)} pts)`
-                : `Top ${ci.cut} go to Elite 15 · ${Math.abs(ci.gap)} pts behind the cut`
-              : ci.gap >= 0
-                ? `Keeping your spot: top ${ci.cut} stay (${signed(ci.gap, 0)} pts)`
-                : `Bottom 3 are relegated · ${Math.abs(ci.gap)} pts behind`}
-          </T>
-        ) : (
-          <T variant="caption" tone="muted">
-            Rookie season: everyone turns Pro at the end.
-          </T>
-        )}
-        <Bar value={s.week} max={z.weeks} fill={color.surface3} extra={0} height={4} />
-        <T variant="small" tone="muted">{`${z.weeks - s.week} weeks left in the season`}</T>
       </Card>
-
-      {s.seasons.length ? (
-        <Card>
-          <Label>Last season</Label>
-          <T variant="bodyStrong">{outcomeTitle(s.seasons.at(-1)!.outcome, s.seasons.at(-1)!.nextDivision)}</T>
-          <T variant="meta" tone="muted">
-            {`${s.seasons.at(-1)!.division} · ${ordinal(s.seasons.at(-1)!.rank)} of ${s.seasons.at(-1)!.fieldSize} · ${s.seasons.at(-1)!.wins} wins`}
-          </T>
-        </Card>
-      ) : null}
-
-      <View style={{ paddingTop: space.sm }}>
-        <Button variant="outline" label="New career" onPress={() => confirm("Start a new career? This one will be lost.", newCareer)} />
-      </View>
     </Screen>
   );
 }
 
 function CareerOver() {
   const { s, newCareer } = useGame();
+  const p = profileOf(s);
   const titles = s.seasons.filter((r) => r.worlds === 1).length;
   const best = Math.max(...s.seasons.map((r) => r.ovr));
   return (
     <Screen footer={<Button hero label="New career" onPress={newCareer} />}>
       <Hud />
       <Card tint={color.trophyTint} style={{ alignItems: "center", paddingVertical: space.xxl }}>
-        <Label>Retired at {s.age - 1}</Label>
+        <Label>{`${p.first} ${p.last} · retired at ${s.age - 1}`}</Label>
         <T variant="displayTitle" style={{ textAlign: "center" }}>
           {titles ? `${titles}x World Champion` : "Career over"}
         </T>
         <T variant="meta" tone="ink2">{`Peak overall ${best.toFixed(1)} · ${s.seasons.reduce((t, r) => t + r.wins, 0)} race wins`}</T>
       </Card>
+      <Button variant="secondary" icon="badge" label="Wall of fame" onPress={() => router.push("/wall")} />
       <Card>
         <Label>Seasons</Label>
         {s.seasons.map((r) => (
@@ -201,3 +236,12 @@ function CareerOver() {
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  track: { height: 22, justifyContent: "center" },
+  line: { height: 6, borderRadius: 3, backgroundColor: color.surface3 },
+  cut: { position: "absolute", width: 2, height: 22, marginLeft: -1, backgroundColor: color.ink2 },
+  dot: { position: "absolute", width: 16, height: 16, borderRadius: 8, marginLeft: -8, borderWidth: 3, borderColor: color.surface },
+  slot: { width: 14, height: 14, borderRadius: 3, borderWidth: 1.5, borderColor: color.border },
+  slotOn: { backgroundColor: color.accent, borderColor: color.accent },
+});

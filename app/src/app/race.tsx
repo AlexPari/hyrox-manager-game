@@ -55,7 +55,7 @@ function Playback({ race }: { race: RaceEvent }) {
     <Screen
       footer={
         done ? (
-          <Button hero label="See result" onPress={() => router.replace("/report")} />
+          <Button hero label="See result" onPress={() => router.replace("/patch")} />
         ) : (
           <Button variant="secondary" icon="skip" label="Skip to finish" onPress={() => setElapsed(total)} />
         )

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  STAT_IDS, autoPlay, bestFocus, decideWeek, defaultConfig, deserialize, knockChanceFor, newGame, nextFatigue, ovr,
-  ovrGain, overall, playWeek, profiles, raceDay, raceIndexForWeek, timeForRating, ratingForTime, type GameState, type Stats,
+  STAT_IDS, autoPlay, bestFocus, decideWeek, defaultConfig, deserialize, expectedPlace, expectedRaceRating, knockChanceFor,
+  newGame, nextFatigue, ovr, ovrGain, overall, playWeek, profiles, raceDay, raceIndexForWeek, raceLog, readiness, recordWeek,
+  seasonRaces, timeForRating, ratingForTime, type GameState, type Stats,
 } from "../src";
 
 const c = defaultConfig;
@@ -158,5 +159,34 @@ describe("save migration", () => {
     expect(ovr(s)).toBeCloseTo(64.5, 6);
     s.energy = 999;
     expect(playWeek(s, { race: false }).ok).toBe(true);
+  });
+});
+
+describe("app helpers", () => {
+  it("records raced weeks in the history and builds the season calendar", () => {
+    const s = newGame(31);
+    s.energy = 999;
+    let week = 1;
+    while (!raceIndexForWeek(s, week)) week++;
+    s.week = week - 1;
+    const r = playWeek(s, { race: true });
+    if (!r.ok) throw new Error(r.error);
+    recordWeek(s, r.events, s.division, s.age);
+    expect(raceLog(s)).toHaveLength(1);
+    const cal = seasonRaces(s);
+    expect(cal[0].status).toBe("done");
+    expect(cal[0].result?.place).toBe(raceLog(s)[0].place);
+    expect(cal[1].status).toBe("next");
+  });
+
+  it("lowers readiness with fatigue and a knock, and predicts a place from rival levels", () => {
+    const s = newGame(32);
+    expect(readiness(s)).toBe(100);
+    s.fatigue = 50;
+    s.status = "knock";
+    expect(readiness(s)).toBe(55);
+    expect(expectedPlace(s, 999)).toBe(1);
+    expect(expectedPlace(s, -999)).toBe(s.field.rivals.length + 1);
+    expect(expectedRaceRating(s, "aggressive")).toBeGreaterThan(expectedRaceRating(s, "conservative"));
   });
 });
