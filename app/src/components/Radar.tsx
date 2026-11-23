@@ -1,9 +1,10 @@
 import { View } from "react-native";
 import Svg, { Circle, Line, Polygon, Text as SvgText } from "react-native-svg";
-import { color } from "@/theme";
+import { color, font } from "@/theme";
 
-/** Spider chart of 0-100 values. The scale starts at `floor` so differences between stations stay visible. */
-export function Radar({ items, size = 280, floor = 30 }: { items: Array<{ label: string; value: number; tone?: string }>; size?: number; floor?: number }) {
+/** Spider chart of 0-100 values. The scale starts 20 below the weakest value so differences between stations stay visible. */
+export function Radar({ items, size = 280 }: { items: Array<{ label: string; value: number; tone?: string }>; size?: number }) {
+  const floor = Math.max(0, Math.min(...items.map((it) => it.value)) - 20);
   const cx = size / 2;
   const cy = size / 2;
   const R = size * 0.32;
@@ -32,7 +33,7 @@ export function Radar({ items, size = 280, floor = 30 }: { items: Array<{ label:
         {items.map((it, i) => {
           const [x, y] = pt(i, 1.28);
           return (
-            <SvgText key={i} x={x} y={y} fill={it.tone ?? color.ink2} fontSize={10} fontWeight="700" textAnchor="middle">
+            <SvgText key={i} x={x} y={y} fill={it.tone ?? color.ink2} fontSize={10} fontFamily={font.semibold} textAnchor="middle">
               {`${it.label} ${Math.round(it.value)}`}
             </SvgText>
           );
