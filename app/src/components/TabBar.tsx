@@ -1,46 +1,87 @@
-import { router, type Href } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { color, font } from "@/theme";
+import * as Haptics from "expo-haptics";
+import type { BottomTabBarProps } from "expo-router/js-tabs";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useGame } from "@/game/store";
+import { useOpen } from "@/game/nav";
+import { color, font, size } from "@/theme";
 import { Icon, type IconName } from "./Icon";
 
-const TABS: Array<{ icon: IconName; label: string; href: Href }> = [
-  { icon: "athlete", label: "Athlete", href: "/athlete" },
-  { icon: "season", label: "Calendar", href: "/calendar" },
-  { icon: "rank", label: "Rankings", href: "/rankings" },
-  { icon: "badge", label: "Wall", href: "/wall" },
-  { icon: "pass", label: "Pass", href: "/pass" },
-  { icon: "bag", label: "Shop", href: "/shop" },
-];
+const TABS: Record<string, { icon: IconName; label: string }> = {
+  index: { icon: "home", label: "Home" },
+  calendar: { icon: "season", label: "Calendar" },
+  athlete: { icon: "athlete", label: "Athlete" },
+};
 
-/** Hub shortcuts to every other screen, above the Continue button. Badges flag something to look at. */
-export function TabBar({ badges = {} }: { badges?: Partial<Record<string, number | true>> }) {
+function tap() {
+  if (Platform.OS !== "web") Haptics.selectionAsync().catch(() => undefined);
+}
+
+/** The 4 tabs: Home, Calendar and Athlete switch screens; Shop opens as a sheet over the current tab. */
+export function TabBar({ state, navigateToTab }: BottomTabBarProps) {
+  const insets = useSafeAreaInsets();
+  const { s } = useGame();
+  const open = useOpen();
+  const badges: Record<string, true | undefined> = { athlete: s.status !== "fit" ? true : undefined };
   return (
-    <View style={styles.row} accessibilityRole="tablist">
-      {TABS.map((t) => {
-        const b = badges[t.label];
-        return (
-          <Pressable key={t.label} accessibilityRole="tab" accessibilityLabel={t.label} onPress={() => router.push(t.href)} style={styles.tab}>
-            <View>
-              <Icon name={t.icon} size={22} color={color.ink2} />
-              {b ? (
-                <View style={[styles.badge, typeof b === "number" ? styles.badgeNum : null]}>
-                  {typeof b === "number" ? <Text style={styles.badgeText}>{b}</Text> : null}
-                </View>
-              ) : null}
-            </View>
-            <Text style={styles.label}>{t.label}</Text>
-          </Pressable>
-        );
-      })}
+    <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+      <View style={styles.row} accessibilityRole="tablist">
+        {state.routes.map((route, i) => {
+          const t = TABS[route.name];
+          if (!t) return null;
+          const focused = state.index === i;
+          return (
+            <Item
+              key={route.key}
+              icon={t.icon}
+              label={t.label}
+              focused={focused}
+              badge={badges[route.name]}
+              onPress={() => {
+                if (focused) return; // tapping the tab you're on does nothing
+                tap();
+                navigateToTab(route.key);
+              }}
+            />
+          );
+        })}
+        <Item
+          icon="bag"
+          label="Shop"
+          focused={false}
+          onPress={() => {
+            tap();
+            open("/shop");
+          }}
+        />
+      </View>
     </View>
   );
 }
 
+function Item({ icon, label, focused, badge, onPress }: { icon: IconName; label: string; focused: boolean; badge?: true; onPress: () => void }) {
+  const tone = focused ? color.accent : color.ink2;
+  return (
+    <Pressable
+      accessibilityRole="tab"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: focused }}
+      onPress={onPress}
+      style={({ pressed }) => [styles.tab, pressed ? { opacity: 0.7 } : null]}
+    >
+      <View>
+        <Icon name={icon} size={22} color={tone} />
+        {badge ? <View style={styles.badge} /> : null}
+      </View>
+      <Text style={[styles.label, { color: tone }]}>{label}</Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
-  row: { flexDirection: "row", justifyContent: "space-between" },
-  tab: { flex: 1, alignItems: "center", gap: 3, minHeight: 44, justifyContent: "center" },
-  label: { fontFamily: font.semibold, fontSize: 11, color: color.ink2 },
+  bar: { backgroundColor: color.navBar, alignItems: "center", borderTopWidth: 1, borderTopColor: color.hairline },
+  row: { flexDirection: "row", width: "100%", maxWidth: size.maxWidth, paddingTop: 6 },
+  tab: { flex: 1, alignItems: "center", gap: 3, minHeight: 52, justifyContent: "center" },
+  label: { fontFamily: font.semibold, fontSize: 11 },
   badge: { position: "absolute", top: -2, right: -4, width: 9, height: 9, borderRadius: 5, backgroundColor: color.accent },
-  badgeNum: { width: 18, height: 18, borderRadius: 9, top: -6, right: -10, alignItems: "center", justifyContent: "center", backgroundColor: color.danger },
-  badgeText: { fontFamily: font.bold, fontSize: 10, color: color.ink },
 });
