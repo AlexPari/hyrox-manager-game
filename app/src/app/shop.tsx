@@ -1,4 +1,3 @@
-import { router } from "expo-router";
 import { useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import {
@@ -22,12 +21,14 @@ import { useGame } from "@/game/store";
 import { effectsText, facilityName, gearDetail, gearName } from "@/names";
 import { num } from "@/format";
 import { color, radius, space } from "@/theme";
-import { errorText } from "./athlete";
+import { useOpen } from "@/game/nav";
+import { errorText } from "@/game/rules";
 
 const usd = (v: number) => `$${v.toFixed(2)}`;
 
 export default function Shop() {
   const { s, run, watchAd } = useGame();
+  const open = useOpen();
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const c = s.config;
   const act = (fn: Parameters<typeof run>[0], okText: string) => {
@@ -42,7 +43,7 @@ export default function Shop() {
 
   return (
     <Screen>
-      <Hud back />
+      <Hud close />
       <View style={{ gap: 2 }}>
         <Label>Offers · gems · energy · equipment</Label>
         <T variant="h1">Shop</T>
@@ -74,7 +75,7 @@ export default function Shop() {
       <Card>
         <Row style={{ justifyContent: "space-between" }}>
           <T variant="h2">Season pass</T>
-          <Pressable accessibilityRole="button" onPress={() => router.push("/pass")} hitSlop={8}>
+          <Pressable accessibilityRole="button" onPress={() => open("/pass")} hitSlop={8}>
             <T variant="bodyStrong" tone="accent">
               {"Open pass ›"}
             </T>
@@ -127,13 +128,13 @@ export default function Shop() {
       </Section>
 
       <Section title="Boosts">
-        <Item title="Ice bath" sub={`Fatigue −${c.boosts.iceBathFatigue} before a race · choose it on race day`}>
+        <Item title="Ice bath" sub={`Fatigue −${c.boosts.iceBathFatigue} before a race · choose it in the race plan`}>
           <Info gems={c.gems.iceBath} />
         </Item>
-        <Item title="Training booster" sub={`×${c.boosts.boosterMult} gains for a week · choose it in Training`}>
+        <Item title="Training booster" sub={`×${c.boosts.boosterMult} gains for a week · choose it when you plan the week`}>
           <Info gems={c.gems.booster} />
         </Item>
-        <Item title="Coach call" sub={`+${c.boosts.coachCallBonus} race rating · choose it in the pacing plan`}>
+        <Item title="Coach call" sub={`+${c.boosts.coachCallBonus} race rating · choose it in the race plan`}>
           <Info gems={c.gems.coachCall} />
         </Item>
         <Item title="Physio session" sub={s.status === "knock" ? "Clears your knock now" : "Clears a knock (you're not knocked)"}>
