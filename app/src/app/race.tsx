@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { BackHandler, Platform, StyleSheet, useWindowDimensions, View } from "react-native";
 import { raceLog, raceRunners, type GameEvent, type RaceRunner } from "@sim";
 import { Arena, segmentAt } from "@/components/Arena";
+import { Burst, PopIn } from "@/components/motion";
 import { Button, Card, Chip, IconButton, Label, Row, Screen, Segmented, T } from "@/components/ui";
 import { rivalIdentity } from "@/data/places";
 import { useGame } from "@/game/store";
@@ -178,6 +179,7 @@ function Playback({ race, division }: { race: RaceEvent; division: string }) {
 
       <View>
         <Arena runners={runners} t={t} width={arenaW} leaderId={leaderId} />
+        {done && race.place <= 3 ? <Burst colors={[color.gold, color.accent, color.ink]} count={30} spread={170} /> : null}
         {banner ? (
           <View pointerEvents="none" style={styles.bannerWrap}>
             <View style={styles.banner}>
@@ -194,10 +196,19 @@ function Playback({ race, division }: { race: RaceEvent; division: string }) {
           <T variant="small" tone="muted">
             Position
           </T>
-          <T variant="numberL">
-            {`P${live}`}
-            <T variant="meta" tone="muted">{` /${race.fieldSize}`}</T>
-          </T>
+          {done ? (
+            <PopIn from={0.6}>
+              <T variant="numberL" style={{ color: race.place <= 3 ? color.gold : color.ink }}>
+                {`P${live}`}
+                <T variant="meta" tone="muted">{` /${race.fieldSize}`}</T>
+              </T>
+            </PopIn>
+          ) : (
+            <T variant="numberL">
+              {`P${live}`}
+              <T variant="meta" tone="muted">{` /${race.fieldSize}`}</T>
+            </T>
+          )}
         </Card>
         <Card style={styles.tile}>
           <T variant="small" tone="muted">

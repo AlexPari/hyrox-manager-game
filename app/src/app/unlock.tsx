@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { Animated, Platform, StyleSheet, View } from "react-native";
 import { energyCap } from "@sim";
 import { Icon, type IconName } from "@/components/Icon";
+import { Burst, FadeIn } from "@/components/motion";
 import { Button, Card, Label, Row, Screen, T } from "@/components/ui";
 import { UNLOCK_GATE, unlocks, type Feature } from "@/game/ftue";
 import { useGame } from "@/game/store";
@@ -70,8 +71,10 @@ export default function Unlock() {
         <T variant="body" tone="ink2" style={{ textAlign: "center", maxWidth: 300 }}>
           {text}
         </T>
+        <Burst colors={[color.accent, color.gold, color.ink]} count={26} delay={150} />
       </Card>
       {next.length ? (
+        <FadeIn delay={500}>
         <Card>
           <Label>Coming next</Label>
           {next.map((f) => (
@@ -86,6 +89,7 @@ export default function Unlock() {
             </Row>
           ))}
         </Card>
+        </FadeIn>
       ) : null}
     </Screen>
   );

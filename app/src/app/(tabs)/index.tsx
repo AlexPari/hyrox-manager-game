@@ -20,6 +20,7 @@ import { Ring } from "@/components/Ring";
 import { Button, Card, Chip, Divider, Label, Row, Screen, T } from "@/components/ui";
 import { flag, placeOf } from "@/data/places";
 import { Coach } from "@/components/Coach";
+import { FadeIn } from "@/components/motion";
 import { pendingUnlock, unlocks } from "@/game/ftue";
 import { useOpen } from "@/game/nav";
 import { useGame } from "@/game/store";
@@ -121,9 +122,14 @@ export default function Hub() {
         <T variant="h1">{`Week ${week} of ${z.weeks}`}</T>
       </View>
 
-      {tip ? <Coach>{tip.text}</Coach> : null}
+      {tip ? (
+        <FadeIn>
+          <Coach>{tip.text}</Coach>
+        </FadeIn>
+      ) : null}
 
-      <Pressable accessibilityRole="button" accessibilityLabel="Open your athlete" disabled={!u.athlete} onPress={() => router.navigate("/athlete")}>
+      <FadeIn delay={60}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Open your athlete" disabled={!u.athlete} onPress={() => router.navigate("/athlete")} style={({ pressed }) => (pressed ? styles.pressed : null)}>
         <Card>
           <Row gap={space.lg}>
             <View style={{ flex: 1, gap: 2 }}>
@@ -137,9 +143,11 @@ export default function Hub() {
           </Row>
         </Card>
       </Pressable>
+      </FadeIn>
 
       {next ? (
-        <Pressable accessibilityRole="button" accessibilityLabel="Open the calendar" disabled={!u.calendar} onPress={() => router.navigate("/calendar")}>
+        <FadeIn delay={120}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Open the calendar" disabled={!u.calendar} onPress={() => router.navigate("/calendar")} style={({ pressed }) => (pressed ? styles.pressed : null)}>
           <Card tint={next.worlds ? color.trophyTint : undefined} style={inWeeks === 1 ? { borderWidth: 1.5, borderColor: color.accent } : null}>
             <Row style={{ justifyContent: "space-between" }}>
               <Label>{inWeeks === 1 ? "Race this week" : `Next race · in ${inWeeks} weeks`}</Label>
@@ -165,9 +173,11 @@ export default function Hub() {
             </Row>
           </Card>
         </Pressable>
+        </FadeIn>
       ) : null}
 
-      <Pressable accessibilityRole="button" onPress={() => open("/rankings")}>
+      <FadeIn delay={180}>
+      <Pressable accessibilityRole="button" onPress={() => open("/rankings")} style={({ pressed }) => (pressed ? styles.pressed : null)}>
         <Card>
           <Row style={{ justifyContent: "space-between" }}>
             <Label>{roadTitle}</Label>
@@ -195,8 +205,10 @@ export default function Hub() {
           </T>
         </Card>
       </Pressable>
+      </FadeIn>
 
       {u.shop ? (
+      <FadeIn delay={240}>
       <Card>
         <Row style={{ justifyContent: "space-between" }}>
           <Label>Missions</Label>
@@ -232,6 +244,7 @@ export default function Hub() {
           </View>
         </Row>
       </Card>
+      </FadeIn>
       ) : null}
     </Screen>
   );
@@ -267,6 +280,7 @@ function CareerOver() {
 }
 
 const styles = StyleSheet.create({
+  pressed: { opacity: 0.92, transform: [{ scale: 0.98 }] },
   tile: { flex: 1, backgroundColor: color.surface2, borderRadius: radius.md, padding: space.md, gap: 2 },
   track: { height: 22, justifyContent: "center" },
   line: { height: 6, borderRadius: 3, backgroundColor: color.surface3 },
