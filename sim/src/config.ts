@@ -46,7 +46,7 @@ export interface SeasonConfig {
   phase: "Rookie" | "Build" | "Peak" | "Decline";
   weeks: number;
   races: number;
-  /** Target real days to play the season for an active free player. Drives the energy cost of a week. */
+  /** Reference real days to play the season for an active free player (informational, used by the tools). */
   targetDays: number;
   bonus: number;
 }
@@ -76,7 +76,8 @@ export interface GearConfig {
 }
 
 export interface Config {
-  energy: { cap: number; regenPerDay: number; vipCapBonus: number; adEnergy: number; adEnergyMaxPerDay: number; plus20Gems: number; refillGems: number };
+  /** perWeek: fixed cost of one week (races cost nothing extra). regenPerDay: real-time refill. */
+  energy: { cap: number; perWeek: number; regenPerDay: number; vipCapBonus: number; adEnergy: number; adEnergyMaxPerDay: number; plus20Gems: number; refillGems: number };
   coins: { start: number; adCoins: number; adCoinsMaxPerDay: number; physio: number; travelPerRaceAbroad: number };
   gems: { start: number; vipGemsPerDay: number; iceBath: number; booster: number; coachCall: number; fastHeal: number };
   prices: { vipUsd: number; passUsd: number; gemPacks: Array<{ gems: number; usd: number }> };
@@ -136,7 +137,7 @@ export interface Config {
 
 /** v2: station stats, training choices, fatigue and pacing (23 Nov 2026). Economy values from the balancing sheet. */
 export const defaultConfig: Config = {
-  energy: { cap: 50, regenPerDay: 72, vipCapBonus: 15, adEnergy: 5, adEnergyMaxPerDay: 3, plus20Gems: 25, refillGems: 50 },
+  energy: { cap: 50, perWeek: 10, regenPerDay: 24, vipCapBonus: 15, adEnergy: 5, adEnergyMaxPerDay: 3, plus20Gems: 25, refillGems: 50 },
   coins: { start: 1000, adCoins: 200, adCoinsMaxPerDay: 3, physio: 300, travelPerRaceAbroad: 500 },
   gems: { start: 120, vipGemsPerDay: 10, iceBath: 20, booster: 30, coachCall: 15, fastHeal: 40 },
   prices: { vipUsd: 9.99, passUsd: 9.99, gemPacks: [{ gems: 80, usd: 0.99 }, { gems: 450, usd: 4.99 }, { gems: 1200, usd: 9.99 }] },
