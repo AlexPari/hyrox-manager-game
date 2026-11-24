@@ -2,8 +2,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { AppState } from "react-native";
+import { FTUE_NEW, FTUE_OFF, unlocks, type Ftue } from "./ftue";
 import {
   advanceRealTime,
+  energyPerWeek,
   deserialize,
   newGame,
   ovr,
@@ -37,6 +39,8 @@ interface SaveFile {
   last: LastWeek | null;
   /** A season ended and its recap hasn't been shown yet. */
   recapPending?: boolean;
+  /** Guided first session (missing in saves from before it existed: everything unlocked). */
+  ftue?: Ftue;
 }
 
 interface Session {
@@ -44,8 +48,9 @@ interface Session {
   clockAt: number;
   last: LastWeek | null;
   recapPending: boolean;
-  /** The week being planned (Training → Race day → Pacing). Not saved. */
+  /** The week being planned (Plan week → Race plan). Not saved. */
   draft: WeekChoices | null;
+  ftue: Ftue;
 }
 
 interface GameApi {
@@ -63,6 +68,9 @@ interface GameApi {
   clearRecap: () => void;
   /** Starts over; the onboarding screen then asks for the athlete's name. */
   newCareer: () => void;
+  ftue: Ftue;
+  /** Marks a coach tip or an unlock moment as shown. */
+  markSeen: (key: string) => void;
 }
 
 const GameContext = createContext<GameApi | null>(null);
@@ -72,7 +80,7 @@ function freshSeed(): number {
 }
 
 function freshSession(): Session {
-  return { s: newGame(freshSeed()), clockAt: Date.now(), last: null, recapPending: false, draft: null };
+  return { s: newGame(freshSeed()), clockAt: Date.now(), last: null, recapPending: false, draft: null, ftue: { ...FTUE_NEW, seen: [] } };
 }
 
 export function GameProvider({ children }: { children: ReactNode }) {
@@ -83,7 +91,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const persist = useCallback(() => {
     const g = ref.current;
     if (!g) return;
-    const file: SaveFile = { state: serialize(g.s), clockAt: g.clockAt, last: g.last, recapPending: g.recapPending };
+    const file: SaveFile = { state: serialize(g.s), clockAt: g.clockAt, last: g.last, recapPending: g.recapPending, ftue: g.ftue };
     AsyncStorage.setItem(SAVE_KEY, JSON.stringify(file)).catch(() => undefined);
   }, []);
 
@@ -110,7 +118,17 @@ export function GameProvider({ children }: { children: ReactNode }) {
         const raw = await AsyncStorage.getItem(SAVE_KEY);
         if (raw) {
           const file = JSON.parse(raw) as SaveFile;
-          restored = { s: deserialize(file.state), clockAt: file.clockAt, last: file.last, recapPending: !!file.recapPending, draft: null };
+          const ftue = file.ftue ?? FTUE_OFF;
+          // Opening the app again after the first race ends the first session.
+          const s = deserialize(file.state);
+          restored = {
+            s,
+            clockAt: file.clockAt,
+            last: file.last,
+            recapPending: !!file.recapPending,
+            draft: null,
+            ftue: { ...ftue, secondSession: ftue.secondSession || (s.raceLog?.length ?? 0) > 0 },
+          };
         }
       } catch {
         restored = null; // unreadable save: start a new career rather than crash
@@ -155,7 +173,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
             const division = g.s.division;
             const age = g.s.age;
             const before = { season: g.s.season, week: g.s.week + 1, ovrBefore: ovr(g.s), fatigueBefore: g.s.fatigue };
+            // First session: weeks are free (energy is hidden until the shop unlocks).
+            const free = !unlocks(g.s, g.ftue).shop;
+            if (free) g.s.energy += energyPerWeek(g.s);
             const r = playWeek(g.s, choices);
+            if (free && !r.ok) g.s.energy -= energyPerWeek(g.s);
             if (r.ok) {
               recordWeek(g.s, r.events, division, age);
               g.last = { ...before, choices, events: r.events };
@@ -191,6 +213,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
           },
           newCareer: () => {
             ref.current = freshSession();
+            persist();
+            refresh();
+          },
+          ftue: g.ftue,
+          markSeen: (key) => {
+            if (g.ftue.seen.includes(key)) return;
+            g.ftue = { ...g.ftue, seen: [...g.ftue.seen, key] };
+            if (g.ftue.active && ["unlock:calendar", "unlock:athlete", "unlock:shop"].every((k) => g.ftue.seen.includes(k))) g.ftue.active = false;
             persist();
             refresh();
           },

@@ -28,6 +28,7 @@ const paths = {
   clock: [<Circle key="c" cx={12} cy={12} r={9} />, <Path key="p" d="M12 7v5l3 2" />],
   skip: [<Path key="p" d="M5 5l8 7-8 7zM15 5v14" />],
   tv: [<Rect key="r" x={3} y={6} width={18} height={12} rx={2} />, <Path key="p" d="M10 9.5l4 2.5-4 2.5z" />],
+  replay: [<Path key="p" d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5" />],
   home: [<Path key="p" d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" />],
 };
 
