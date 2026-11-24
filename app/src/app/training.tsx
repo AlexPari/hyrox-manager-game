@@ -24,6 +24,8 @@ import { Hud } from "@/components/Hud";
 import { Icon } from "@/components/Icon";
 import { readinessColor, readinessLabel } from "@/components/Ring";
 import { Bar, Button, Card, Chip, Label, Row, Screen, Segmented, T } from "@/components/ui";
+import { Coach } from "@/components/Coach";
+import { unlocks } from "@/game/ftue";
 import { riskLabel, weekMult } from "@/game/rules";
 import { useGame } from "@/game/store";
 import { focusInfo, intensityInfo, signed, statShort } from "@/format";
@@ -33,7 +35,9 @@ const FOCUS: TrainingFocus[] = ["run", "engine", "strength", "hybrid", "balanced
 const INTENSITY: Intensity[] = ["light", "normal", "hard"];
 
 export default function Training() {
-  const { s, play, draft, setDraft } = useGame();
+  const { s, play, draft, setDraft, ftue, markSeen } = useGame();
+  const free = !unlocks(s, ftue).shop;
+  const tip = ftue.active && !ftue.seen.includes("plan:first");
   const c = s.config;
   const week = s.week + 1;
   const raceWeek = raceIndexForWeek(s, week) > 0;
@@ -66,6 +70,7 @@ export default function Training() {
   }
 
   function next() {
+    if (tip) markSeen("plan:first");
     if (raceWeek) {
       // Race weeks: show the training effect, then the race plan. The week is played when the race starts.
       setDraft(plan);
@@ -90,7 +95,7 @@ export default function Training() {
               {error}
             </T>
           ) : null}
-          <Button hero label="Confirm week" sub={`Uses ${energyPerWeek(s)} energy${raceWeek ? " · race plan next" : ""}`} onPress={next} />
+          <Button hero label="Confirm week" sub={`${free ? "Free in your first session" : `${energyPerWeek(s)} energy`}${raceWeek ? " · race plan next" : ""}`} onPress={next} />
         </>
       }
     >
@@ -99,6 +104,12 @@ export default function Training() {
         <Label>{`Week ${week} of ${seasonConfig(s).weeks} · ${raceWeek ? "race this week" : "no race"}`}</Label>
         <T variant="h1">{`Plan week ${week}`}</T>
       </View>
+
+      {tip ? (
+        <Coach>
+          Pick a training block and an intensity: the green bars show what you gain this week. Hard gives more but tires you. My plan at the top is always a safe choice.
+        </Coach>
+      ) : null}
 
       <Pressable accessibilityRole="button" onPress={applyCoach} style={[styles.coach, isCoachPlan ? { borderColor: color.success, backgroundColor: color.surface } : null]}>
         <View style={styles.coachAvatar}>
