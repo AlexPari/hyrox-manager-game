@@ -1,6 +1,7 @@
 import { router } from "expo-router";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Coach } from "@/components/Coach";
 import { Button, Card, Label, Screen, T } from "@/components/ui";
 import { COUNTRIES, flag } from "@/data/places";
 import { useGame } from "@/game/store";
@@ -31,6 +32,9 @@ export default function Onboarding() {
           A rookie season in Open, then Pro. Earn your place in Elite 15 and chase a world title in your peak years, 28 to 31.
         </T>
       </View>
+      {fresh ? (
+        <Coach>Hi, I'm your coach. Your rookie season in Open is 12 weeks and 6 races, then you turn Pro. I'll show you everything as we go.</Coach>
+      ) : null}
       <Card>
         <Label>First name</Label>
         <TextInput
