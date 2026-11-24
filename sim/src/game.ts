@@ -24,8 +24,9 @@ export function referenceEnergyPerDay(c: Config): number {
   return Math.min(c.energy.regenPerDay, c.energy.cap * 2) + c.energy.adEnergy * 2;
 }
 
-export function energyPerWeek(s: GameState, season: SeasonConfig = seasonConfig(s)): number {
-  return Math.round((season.targetDays * referenceEnergyPerDay(s.config)) / season.weeks);
+/** One week always costs the same (10 by default), race or not: a full bar of 50 is 5 weeks in a row. */
+export function energyPerWeek(s: GameState): number {
+  return s.config.energy.perWeek;
 }
 
 export function isVip(s: GameState): boolean {
@@ -165,7 +166,7 @@ function createField(s: GameState): void {
 export function newGame(seed: number, config: Config = defaultConfig): GameState {
   const c = clone(config);
   const s: GameState = {
-    version: 2,
+    version: 3,
     config: c,
     rng: seedFrom(seed),
     season: 1,
@@ -383,7 +384,7 @@ export function playWeek(s: GameState, choice: WeekChoices): ActionResult {
       (worlds && s.heatCampBooked ? c.camps.heat.raceBonus : 0) - (wasStatus === "knock" ? c.injury.knockPenalty : 0) -
       raceFatigue * c.fatigue.racePenaltyPerPoint;
     const day = raceDay(c, s, { stats: s.stats, offset, pacing, effects: fx });
-    const { place, winnerRating } = runRace(s, day.rating);
+    const { place, winnerRating, field } = runRace(s, day.rating);
     const prize = Math.round(prizeForPlace(c, place!) * d.prizeMult * (worlds ? c.prizes.worldsMult : 1));
     s.coins += prize;
     let xp = 0;
@@ -406,7 +407,7 @@ export function playWeek(s: GameState, choice: WeekChoices): ActionResult {
     const winnerSec = place === 1 ? day.timeSec : Math.round(timeForRating(c, winnerRating));
     ev.push({
       type: "race", season: s.season, week, raceIndex, city, worlds, abroad, place: place!, fieldSize: d.size, prize, xp, travel,
-      pacing, blewUp: day.blewUp, timeSec: day.timeSec, winnerSec, splits: day.splits,
+      pacing, blewUp: day.blewUp, timeSec: day.timeSec, winnerSec, splits: day.splits, field,
     });
     if (xp) grantTiers(s, ev);
     if (worlds && place === 1) ev.push({ type: "worldChampion", age: s.age });
@@ -432,7 +433,10 @@ export function playWeek(s: GameState, choice: WeekChoices): ActionResult {
 }
 
 /** Runs one race for the persistent field. Returns the player's place (null if the player didn't race) and the winning rating. */
-function runRace(s: GameState, myScore: number | null): { place: number | null; winnerRating: number } {
+function runRace(
+  s: GameState,
+  myScore: number | null,
+): { place: number | null; winnerRating: number; field: Array<{ rival: number; rating: number }> } {
   const n = rivalNoise(s.config);
   const perf: Array<{ i: number; v: number }> = s.field.rivals.map((r, i) => ({ i, v: r.level + gauss(s) * n }));
   if (myScore !== null) perf.push({ i: -1, v: myScore });
@@ -445,7 +449,8 @@ function runRace(s: GameState, myScore: number | null): { place: number | null; 
       s.field.mine.push(pts);
     } else s.field.rivals[x.i].points.push(pts);
   });
-  return { place: mine, winnerRating: perf[0].v };
+  const field = perf.filter((x) => x.i >= 0).map((x) => ({ rival: x.i, rating: Math.round(x.v * 1000) / 1000 }));
+  return { place: mine, winnerRating: perf[0].v, field };
 }
 
 function endSeason(s: GameState, ev: GameEvent[]): void {

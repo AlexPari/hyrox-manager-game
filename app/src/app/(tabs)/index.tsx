@@ -19,24 +19,30 @@ import { Icon } from "@/components/Icon";
 import { Ring } from "@/components/Ring";
 import { Button, Card, Chip, Divider, Label, Row, Screen, T } from "@/components/ui";
 import { flag, placeOf } from "@/data/places";
+import { Coach } from "@/components/Coach";
+import { pendingUnlock, unlocks } from "@/game/ftue";
 import { useOpen } from "@/game/nav";
 import { useGame } from "@/game/store";
 import { ordinal, statShort } from "@/format";
 import { color, radius, space } from "@/theme";
 
 export default function Hub() {
-  const { s, watchAd, skipHours, recapPending } = useGame();
+  const { s, watchAd, skipHours, recapPending, ftue, markSeen } = useGame();
   const open = useOpen();
   if (!s.profile) return <Redirect href="/onboarding" />;
   if (recapPending) return <Redirect href="/recap" />;
   if (s.ended) return <CareerOver />;
+  const unlock = pendingUnlock(s, ftue);
+  if (unlock) return <Redirect href={`/unlock?what=${unlock}`} />;
 
   const c = s.config;
   const z = seasonConfig(s);
   const p = profileOf(s);
   const week = Math.min(s.week + 1, z.weeks);
+  const u = unlocks(s, ftue);
+  const free = !u.shop; // first session: weeks are free and energy is hidden
   const need = energyPerWeek(s);
-  const enough = s.energy >= need;
+  const enough = free || s.energy >= need;
   const next = seasonRaces(s).find((r) => r.status === "next");
   const inWeeks = next ? next.week - s.week : 0;
   const raceWeek = raceIndexForWeek(s, s.week + 1) > 0;
@@ -64,6 +70,19 @@ export default function Hub() {
   const pos = st.fieldSize > 1 ? (st.rank - 1) / (st.fieldSize - 1) : 0;
   const cutPos = ci.cut && st.fieldSize > 1 ? (ci.cut - 0.5) / (st.fieldSize - 1) : 0;
   const cta = raceWeek && next ? `Race week · ${next.worlds ? "Worlds" : next.city}` : `Plan week ${week}`;
+  // Coach tips of the first session, each shown once.
+  const tip =
+    !ftue.active
+      ? null
+      : s.week === 0 && !ftue.seen.includes("home:first")
+        ? { key: "home:first", text: `Every week you choose how ${p.first} trains. Your athlete improves, then races. Tap Plan week 1 below to start.` }
+        : raceWeek && !ftue.seen.includes("home:race")
+          ? { key: "home:race", text: "Race week! Plan your training as usual, then you set your race plan: pacing and boosts." }
+          : null;
+  const go = () => {
+    if (tip) markSeen(tip.key);
+    open("/training");
+  };
 
   return (
     <Screen
@@ -73,9 +92,9 @@ export default function Hub() {
           <Button
             hero
             label={enough ? cta : "Not enough energy"}
-            sub={enough ? `Uses ${need} energy` : `Needs ${need} · you have ${Math.floor(s.energy)}`}
+            sub={free ? "Free in your first session" : enough ? `1 week of energy · ${Math.floor(s.energy / need)} left` : `A week needs ${need} energy · you have ${Math.floor(s.energy)}`}
             disabled={!enough}
-            onPress={() => open("/training")}
+            onPress={go}
           />
           {!enough ? (
             <Row>
@@ -102,7 +121,9 @@ export default function Hub() {
         <T variant="h1">{`Week ${week} of ${z.weeks}`}</T>
       </View>
 
-      <Pressable accessibilityRole="button" accessibilityLabel="Open your athlete" onPress={() => router.navigate("/athlete")}>
+      {tip ? <Coach>{tip.text}</Coach> : null}
+
+      <Pressable accessibilityRole="button" accessibilityLabel="Open your athlete" disabled={!u.athlete} onPress={() => router.navigate("/athlete")}>
         <Card>
           <Row gap={space.lg}>
             <View style={{ flex: 1, gap: 2 }}>
@@ -118,7 +139,7 @@ export default function Hub() {
       </Pressable>
 
       {next ? (
-        <Pressable accessibilityRole="button" accessibilityLabel="Open the calendar" onPress={() => router.navigate("/calendar")}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Open the calendar" disabled={!u.calendar} onPress={() => router.navigate("/calendar")}>
           <Card tint={next.worlds ? color.trophyTint : undefined} style={inWeeks === 1 ? { borderWidth: 1.5, borderColor: color.accent } : null}>
             <Row style={{ justifyContent: "space-between" }}>
               <Label>{inWeeks === 1 ? "Race this week" : `Next race · in ${inWeeks} weeks`}</Label>
@@ -175,6 +196,7 @@ export default function Hub() {
         </Card>
       </Pressable>
 
+      {u.shop ? (
       <Card>
         <Row style={{ justifyContent: "space-between" }}>
           <Label>Missions</Label>
@@ -210,6 +232,7 @@ export default function Hub() {
           </View>
         </Row>
       </Card>
+      ) : null}
     </Screen>
   );
 }

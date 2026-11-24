@@ -1,6 +1,7 @@
 import { router } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { energyCap, isVip, minutesToNextEnergy, profileOf } from "@sim";
+import { energyCap, energyPerWeek, isVip, minutesToNextEnergy, profileOf } from "@sim";
+import { unlocks } from "@/game/ftue";
 import { useOpen } from "@/game/nav";
 import { useGame } from "@/game/store";
 import { num } from "@/format";
@@ -17,12 +18,15 @@ export function initials(first: string, last: string): string {
  * the shop; does nothing when the shop is already open).
  */
 export function Hud({ back, close }: { back?: boolean; close?: boolean }) {
-  const { s } = useGame();
+  const { s, ftue } = useGame();
   const open = useOpen();
+  // First session: no energy or wallet yet (weeks are free), and the athlete screen is still locked.
+  const u = unlocks(s, ftue);
   const cap = energyCap(s);
   const next = minutesToNextEnergy(s);
   const p = profileOf(s);
   const gold = s.pass.premium || isVip(s);
+  const weeks = Math.floor(s.energy / energyPerWeek(s));
   return (
     <View accessibilityRole="summary" style={styles.bar}>
       {back || close ? (
@@ -35,20 +39,22 @@ export function Hud({ back, close }: { back?: boolean; close?: boolean }) {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`${p.first} ${p.last}: athlete profile`}
+          disabled={!u.athlete}
           onPress={() => router.navigate("/athlete")}
           style={[styles.avatar, gold ? { borderWidth: 2.5, borderColor: color.gold } : null]}
         >
           <Text style={{ fontFamily: font.display, fontSize: 18, color: gold ? color.gold : color.ink }}>{initials(p.first, p.last)}</Text>
         </Pressable>
       )}
-      <View style={[styles.pill, { gap: 6 }]} accessibilityLabel={`Energy ${Math.floor(s.energy)} of ${cap}`}>
+      {u.shop ? (
+      <View style={[styles.pill, { gap: 6 }]} accessibilityLabel={`Energy for ${weeks} week${weeks === 1 ? "" : "s"}: ${Math.floor(s.energy)} of ${cap}`}>
         <Icon name="bolt" size={15} color={color.accent} />
-        <Text style={styles.pillText}>
-          {Math.floor(s.energy)}/{cap}
-        </Text>
-        {next > 0 ? <Text style={[type.small, { color: color.muted }]}>+1 in {next}m</Text> : null}
+        <Text style={styles.pillText}>{`${weeks} wk${weeks === 1 ? "" : "s"}`}</Text>
+        <Text style={[type.small, { color: color.muted }]}>{next > 0 ? `${Math.floor(s.energy)}/${cap} · +1 in ${next}m` : `${Math.floor(s.energy)}/${cap}`}</Text>
       </View>
+      ) : null}
       <View style={{ flex: 1 }} />
+      {u.shop ? (
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`${num(s.coins)} coins, ${num(s.gems)} gems. Open the shop`}
@@ -64,6 +70,7 @@ export function Hud({ back, close }: { back?: boolean; close?: boolean }) {
           <Icon name="plus" size={16} color={color.accentInk} strokeWidth={3} />
         </View>
       </Pressable>
+      ) : null}
     </View>
   );
 }

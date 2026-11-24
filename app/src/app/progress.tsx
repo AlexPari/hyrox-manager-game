@@ -5,6 +5,7 @@ import { Animated, Easing, Platform, StyleSheet, View } from "react-native";
 import { STAT_IDS, effects, nextFatigue, ovr, ovrGain, raceIndexForWeek, readiness, trainingGains, type GameEvent, type StatId } from "@sim";
 import { readinessColor, readinessLabel } from "@/components/Ring";
 import { Button, Card, Chip, Label, Row, Screen, T } from "@/components/ui";
+import { Coach } from "@/components/Coach";
 import { goHome } from "@/game/nav";
 import { weekNotes, type WeekNote } from "@/game/notes";
 import { weekMult } from "@/game/rules";
@@ -36,7 +37,8 @@ const DURATION = 1600;
  */
 export default function Progress() {
   const { preview } = useLocalSearchParams<{ preview?: string }>();
-  const { s, last, draft } = useGame();
+  const { s, last, draft, ftue, markSeen } = useGame();
+  const [tip] = useState(() => ftue.active && !ftue.seen.includes("progress:first"));
   const [reveal] = useState<Reveal | null>(() => (preview ? fromDraft() : fromLast()));
 
   function fromDraft(): Reveal | null {
@@ -101,9 +103,23 @@ export default function Progress() {
     <Screen
       footer={
         preview ? (
-          <Button hero label="Continue to race plan" onPress={() => router.push("/raceplan")} />
+          <Button
+            hero
+            label="Continue to race plan"
+            onPress={() => {
+              if (tip) markSeen("progress:first");
+              router.push("/raceplan");
+            }}
+          />
         ) : (
-          <Button hero label={ended ? "See your season" : `Back to Home · week ${reveal.week + 1}`} onPress={goHome} />
+          <Button
+            hero
+            label={ended ? "See your season" : `Back to Home · week ${reveal.week + 1}`}
+            onPress={() => {
+              if (tip) markSeen("progress:first");
+              goHome();
+            }}
+          />
         )
       }
     >
@@ -170,6 +186,8 @@ export default function Progress() {
           <T variant="numberM" style={{ color: fatigueColor(reveal.fatigueAfter) }}>{`${Math.round(reveal.fatigueBefore)} → ${Math.round(reveal.fatigueAfter)}`}</T>
         </Card>
       </Row>
+
+      {tip ? <Coach>That's your athlete getting better. Train every week: races are where it pays off.</Coach> : null}
 
       {reveal.notes.map((n, i) => (
         <Card key={i} tint={n.bg} style={{ padding: space.lg }}>

@@ -67,7 +67,7 @@ export interface CurrentSeason {
 
 /** The whole game is one plain JSON object: easy to save, sync and migrate. */
 export interface GameState {
-  version: 2;
+  version: 3;
   config: Config;
   /** Seeded random generator state: the same seed and actions replay the same career. */
   rng: number;
@@ -120,6 +120,8 @@ export type GameEvent =
       type: "race"; season: number; week: number; raceIndex: number; city: string; worlds: boolean; abroad: boolean;
       place: number; fieldSize: number; prize: number; xp: number; travel: number;
       pacing: Pacing; blewUp: boolean; timeSec: number; winnerSec: number; splits: Split[];
+      /** Every rival's race-day rating, in finishing order (optional: older saves don't have it). */
+      field?: Array<{ rival: number; rating: number }>;
     }
   | { type: "raceSkipped"; raceIndex: number }
   | { type: "worldChampion"; age: number }

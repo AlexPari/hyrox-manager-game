@@ -33,6 +33,7 @@ export default function RootLayout() {
           <Stack.Screen name="result" options={{ animation: "fade", gestureEnabled: false }} />
           <Stack.Screen name="recap" options={{ animation: "fade", gestureEnabled: false }} />
           <Stack.Screen name="onboarding" options={{ animation: "fade" }} />
+          <Stack.Screen name="unlock" options={{ animation: "fade", gestureEnabled: false }} />
           {/* Sheets: one tap closes them, opening one from another swaps them (see useOpen). */}
           <Stack.Screen name="shop" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
           <Stack.Screen name="pass" options={{ presentation: "modal", animation: "slide_from_bottom" }} />

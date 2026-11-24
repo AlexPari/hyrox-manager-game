@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  advanceRealTime, advanceTime, autoPlay, buyPassPremium, minutesToNextEnergy, defaultConfig, deserialize, energyPerWeek, fastHeal, isStaffLocked,
+  advanceRealTime, advanceTime, energyCap, autoPlay, buyPassPremium, minutesToNextEnergy, defaultConfig, deserialize, energyPerWeek, fastHeal, isStaffLocked,
   newGame, physio, playWeek, profiles, raceIndexForWeek, serialize, upgradeStaff, type GameState,
 } from "../src";
 
@@ -27,11 +27,12 @@ describe("determinism", () => {
 });
 
 describe("energy and time", () => {
-  it("derives the week cost from each season's target real days", () => {
+  it("charges a fixed 10 energy per week, races included", () => {
     const s = newGame(1);
-    expect(energyPerWeek(s)).toBe(27); // S1: 4 days x 82 energy / 12 weeks
+    expect(energyPerWeek(s)).toBe(10);
     s.season = 8;
-    expect(energyPerWeek(s)).toBe(38); // S8: 14 days x 82 / 30 weeks
+    expect(energyPerWeek(s)).toBe(10);
+    expect(energyCap(s) / energyPerWeek(s)).toBe(5); // a full bar is 5 weeks in a row
   });
 
   it("refuses a week without enough energy and leaves the state untouched", () => {
@@ -48,6 +49,8 @@ describe("energy and time", () => {
     advanceTime(s, 12);
     expect(s.energy).toBe(60);
     s.energy = 10;
+    advanceTime(s, 24, 1); // +24 (1 per hour)
+    expect(s.energy).toBe(34);
     advanceTime(s, 24, 1);
     expect(s.energy).toBe(defaultConfig.energy.cap);
   });
@@ -211,7 +214,7 @@ describe("real-time clock (app)", () => {
     expect(s.energy).toBeCloseTo(defaultConfig.energy.regenPerDay / 24, 6);
     expect(minutesToNextEnergy(s)).toBeGreaterThan(0);
     s.adsCoinsToday = 3;
-    advanceRealTime(s, 30);
+    advanceRealTime(s, 60);
     expect(s.energy).toBe(defaultConfig.energy.cap);
     expect(minutesToNextEnergy(s)).toBe(0);
     expect(s.adsCoinsToday).toBe(0); // a new day started

@@ -115,14 +115,14 @@ export default function Shop() {
       </Section>
 
       <Section title={`Energy · ${Math.floor(s.energy)} / ${energyCap(s)}`}>
-        <T variant="caption" tone="muted">{`+1 every ${Math.round(1440 / c.energy.regenPerDay)} min.`}</T>
+        <T variant="caption" tone="muted">{`A week costs ${c.energy.perWeek} energy, races are free. +1 every ${Math.round(1440 / c.energy.regenPerDay)} min.`}</T>
         <Item title="Watch an ad" sub={`+${c.energy.adEnergy} energy · ${energyAds} of ${c.energy.adEnergyMaxPerDay} left today`}>
           <Button variant="secondary" icon="tv" label="Free" disabled={energyAds <= 0} onPress={() => setMsg(errorText(watchAd("energy")) ? { text: "No ads left today.", ok: false } : { text: `+${c.energy.adEnergy} energy.`, ok: true })} />
         </Item>
-        <Item title="Energy +20" sub="Can go above the cap">
+        <Item title="Energy +20 · 2 weeks" sub="Can go above the cap">
           <Price gems={c.energy.plus20Gems} onPress={() => act((st) => buyEnergy(st, "plus20"), "+20 energy.")} />
         </Item>
-        <Item title="Full refill" sub={`Back to ${energyCap(s)} now`}>
+        <Item title="Full refill" sub={`Back to ${energyCap(s)} now · ${Math.floor(energyCap(s) / c.energy.perWeek)} weeks`}>
           <Price gems={c.energy.refillGems} onPress={() => act((st) => buyEnergy(st, "refill"), "Energy refilled.")} />
         </Item>
       </Section>
