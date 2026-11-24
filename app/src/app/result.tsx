@@ -1,7 +1,9 @@
 import { Redirect } from "expo-router";
 import { useEffect, useState } from "react";
-import { BackHandler, Pressable, View } from "react-native";
-import { rankingPoints, ratingForTime, type GameEvent, type SeasonRecord, type StatId, type TrainingFocus } from "@sim";
+import * as Haptics from "expo-haptics";
+import { BackHandler, Platform, Pressable, View } from "react-native";
+import { raceLog, rankingPoints, ratingForTime, type GameEvent, type SeasonRecord, type StatId, type TrainingFocus } from "@sim";
+import { Burst, FadeIn, PopIn, useCountUp } from "@/components/motion";
 import { Patch } from "@/components/Patch";
 import { Button, Card, Chip, Divider, Label, Row, Screen, T } from "@/components/ui";
 import { goHome } from "@/game/nav";
@@ -37,6 +39,19 @@ const BLOCK_FOR: Record<StatId, TrainingFocus> = {
 export default function Result() {
   const { s, last } = useGame();
   const [open, setOpen] = useState(false);
+  const race0 = last ? find(last.events, "race") : undefined;
+  // The place counts down from the back of the field to the real result, then the reward lands.
+  const [landed, setLanded] = useState(false);
+  const shownPlace = useCountUp(race0?.place ?? 1, {
+    from: race0?.fieldSize ?? 1,
+    duration: 1400,
+    delay: 250,
+    onDone: () => {
+      setLanded(true);
+      if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+    },
+  });
+  const prizeShown = useCountUp(race0?.prize ?? 0, { duration: 900, delay: 1500 });
 
   useEffect(() => {
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
@@ -46,7 +61,7 @@ export default function Result() {
     return () => sub.remove();
   }, []);
 
-  const race = last ? find(last.events, "race") : undefined;
+  const race = race0;
   if (!last || !race) return <Redirect href="/" />;
   const ev = last.events;
   const trained = find(ev, "trained");
@@ -54,6 +69,9 @@ export default function Result() {
   const champion = find(ev, "worldChampion");
   const c = s.config;
   const win = race.place === 1;
+  const before = raceLog(s).filter((r) => !(r.season === race.season && r.week === race.week));
+  const pb = before.length > 0 && race.timeSec < Math.min(...before.map((r) => r.timeSec));
+  const podium = race.place <= 3;
 
   // Time lost on each station against an even race at the winner's level.
   const winnerRating = ratingForTime(c, race.winnerSec);
@@ -66,12 +84,12 @@ export default function Result() {
 
   return (
     <Screen footer={<Button hero label={season ? "See your season" : `Back to Home · week ${last.week + 1}`} onPress={goHome} />}>
-      <Card style={{ paddingVertical: space.xl }} tint={race.place <= 3 ? color.trophyTint : undefined}>
+      <Card style={{ paddingVertical: space.xl }} tint={podium ? color.trophyTint : undefined}>
         <Row gap={space.lg} style={{ alignItems: "center" }}>
           <View style={{ flex: 1, gap: 4 }}>
             <Label>{`${race.worlds ? "World Championships" : race.city} · ${race.fieldSize} athletes`}</Label>
-            <T variant="displayHero" style={{ color: medal(race.place) }}>
-              {ordinal(race.place)}
+            <T variant="displayHero" style={{ color: landed ? medal(race.place) : color.ink2, fontVariant: ["tabular-nums"] }}>
+              {ordinal(Math.round(shownPlace))}
             </T>
             <T variant="numberM" style={{ fontVariant: ["tabular-nums"] }}>
               {raceTime(race.timeSec)}
@@ -80,9 +98,18 @@ export default function Result() {
               {win ? "You won the race" : `${gap(race.timeSec - race.winnerSec)} on the winner`}
             </T>
           </View>
-          <Patch city={race.city} season={race.season} week={race.week} timeSec={race.timeSec} width={116} highlight={win ? "gold" : "accent"} />
+          <PopIn delay={1700} tilt={-12} from={0.3}>
+            <Patch city={race.city} season={race.season} week={race.week} timeSec={race.timeSec} width={116} highlight={win ? "gold" : "accent"} />
+          </PopIn>
         </Row>
         <Row gap={6}>
+          {landed && pb ? (
+            <PopIn>
+              <Chip fg={color.accentInk} bg={color.accent}>
+                New PB
+              </Chip>
+            </PopIn>
+          ) : null}
           <Chip>{pacingInfo[race.pacing].label}</Chip>
           {race.blewUp ? (
             <Chip fg={color.dangerText} bg={color.dangerTint}>
@@ -91,6 +118,7 @@ export default function Result() {
           ) : null}
           {race.abroad ? <Chip>Abroad</Chip> : null}
         </Row>
+        {landed && (podium || pb) ? <Burst colors={podium ? [color.gold, color.accent, color.ink] : [color.accent, color.success, color.ink]} count={podium ? 30 : 20} /> : null}
       </Card>
 
       {champion ? (
@@ -102,12 +130,15 @@ export default function Result() {
         </Card>
       ) : null}
 
-      <Row>
-        <Tile label="Prize" value={num(race.prize)} tone={color.coin} />
-        <Tile label="Ranking pts" value={`${rankingPoints(c, race.place)}`} />
-        <Tile label="Pass XP" value={race.xp ? `+${race.xp}` : "–"} />
-      </Row>
+      <FadeIn delay={1500}>
+        <Row>
+          <Tile label="Prize" value={num(Math.round(prizeShown))} tone={color.coin} />
+          <Tile label="Ranking pts" value={`${rankingPoints(c, race.place)}`} />
+          <Tile label="Pass XP" value={race.xp ? `+${race.xp}` : "–"} />
+        </Row>
+      </FadeIn>
 
+      <FadeIn delay={1800}>
       <Card>
         <Label>What decided it</Label>
         <Line dot={color.success} title={`Best: ${statLabel[best.id]}`} text={best.lost <= 0 ? "as fast as the winner's pace" : `${gap(best.lost)} on the winner's pace`} />
@@ -123,6 +154,7 @@ export default function Result() {
           </>
         ) : null}
       </Card>
+      </FadeIn>
 
       {season ? <SeasonCard record={season.record} over={s.ended} /> : null}
 
@@ -134,6 +166,7 @@ export default function Result() {
         </Card>
       ))}
 
+      <FadeIn delay={2000}>
       <Card style={{ gap: 6 }}>
         <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} onPress={() => setOpen(!open)} style={{ minHeight: 44, justifyContent: "center" }}>
           <Row style={{ justifyContent: "space-between" }}>
@@ -166,6 +199,7 @@ export default function Result() {
           </>
         ) : null}
       </Card>
+      </FadeIn>
     </Screen>
   );
 }
