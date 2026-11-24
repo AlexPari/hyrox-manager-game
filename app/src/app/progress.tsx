@@ -6,6 +6,7 @@ import { STAT_IDS, effects, nextFatigue, ovr, ovrGain, raceIndexForWeek, readine
 import { readinessColor, readinessLabel } from "@/components/Ring";
 import { Button, Card, Chip, Label, Row, Screen, T } from "@/components/ui";
 import { Coach } from "@/components/Coach";
+import { Burst, FadeIn, PopIn } from "@/components/motion";
 import { goHome } from "@/game/nav";
 import { weekNotes, type WeekNote } from "@/game/notes";
 import { weekMult } from "@/game/rules";
@@ -134,19 +135,29 @@ export default function Progress() {
           <T variant="displayHero" style={{ fontVariant: ["tabular-nums"] }}>
             {(reveal.ovrBefore + reveal.ovrGain * k).toFixed(1)}
           </T>
-          <View style={[styles.badge, { opacity: k >= 0.98 ? 1 : 0, backgroundColor: up ? color.success : color.surface3 }]}>
-            <T variant="bodyStrong" style={{ color: up ? color.accentInk : color.ink }}>
-              {signed(reveal.ovrGain, 2)}
-            </T>
-          </View>
+          {k >= 0.98 ? (
+            <PopIn from={0.3}>
+              <View style={[styles.badge, { backgroundColor: up ? color.success : color.surface3 }]}>
+                <T variant="bodyStrong" style={{ color: up ? color.accentInk : color.ink }}>
+                  {signed(reveal.ovrGain, 2)}
+                </T>
+              </View>
+            </PopIn>
+          ) : (
+            <View style={[styles.badge, { opacity: 0 }]}>
+              <T variant="bodyStrong">{signed(reveal.ovrGain, 2)}</T>
+            </View>
+          )}
         </Row>
         {preview ? (
           <T variant="meta" tone="muted">
             Training this week, before the race
           </T>
         ) : null}
+        {k >= 1 && up ? <Burst colors={[color.success, color.accent, color.ink]} count={reveal.ovrGain >= 0.4 ? 26 : 14} spread={130} /> : null}
       </Card>
 
+      <FadeIn delay={150}>
       <Card>
         <Label>{rows.length ? "What improved" : "No training gains this week"}</Label>
         {rows.map(({ id, g }, i) => {
@@ -171,7 +182,9 @@ export default function Progress() {
           );
         })}
       </Card>
+      </FadeIn>
 
+      <FadeIn delay={DURATION}>
       <Row>
         <Card style={styles.tile}>
           <T variant="small" tone="muted">
@@ -186,6 +199,7 @@ export default function Progress() {
           <T variant="numberM" style={{ color: fatigueColor(reveal.fatigueAfter) }}>{`${Math.round(reveal.fatigueBefore)} → ${Math.round(reveal.fatigueAfter)}`}</T>
         </Card>
       </Row>
+      </FadeIn>
 
       {tip ? <Coach>That's your athlete getting better. Train every week: races are where it pays off.</Coach> : null}
 
