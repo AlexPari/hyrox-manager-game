@@ -27,11 +27,13 @@ import { Button, Card, Label, Row, Screen, T } from "@/components/ui";
 import { flag, placeOf } from "@/data/places";
 import { useGame } from "@/game/store";
 import { num, ordinal, pacingInfo, raceTime } from "@/format";
+import { Coach } from "@/components/Coach";
 import { raceDayExtras } from "@/game/rules";
 import { color, radius, space } from "@/theme";
 
 export default function RacePlan() {
-  const { s, play, draft, setDraft, run } = useGame();
+  const { s, play, draft, setDraft, run, ftue, markSeen } = useGame();
+  const tip = ftue.active && !ftue.seen.includes("raceplan:first");
   const [error, setError] = useState<string | null>(null);
   // Set while the week is being played, so the re-render before leaving doesn't redirect.
   const leaving = useRef(false);
@@ -60,6 +62,7 @@ export default function RacePlan() {
   function go(race: boolean) {
     const choice: WeekChoices = { ...plan, race, iceBath: race && !!plan.iceBath, coachCall: race && !!plan.coachCall };
     leaving.current = true;
+    if (tip) markSeen("raceplan:first");
     const r = play(choice);
     if (!r.ok) {
       leaving.current = false;
@@ -105,6 +108,8 @@ export default function RacePlan() {
         <Label>{`Week ${week} · ${worlds ? "World Championships" : "race day"}`}</Label>
         <T variant="h1">Race plan</T>
       </View>
+
+      {tip ? <Coach>Even races at your level. Attack is faster but can blow up. Boosts are optional: you can race without them.</Coach> : null}
 
       <Card style={{ borderWidth: 1.5, borderColor: worlds ? color.gold : color.accent }} tint={worlds ? color.trophyTint : undefined}>
         <Row gap={space.lg}>
