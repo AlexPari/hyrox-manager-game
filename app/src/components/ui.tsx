@@ -1,25 +1,30 @@
+import * as Haptics from "expo-haptics";
 import type { ReactNode } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { color, radius, size, space, type } from "../theme";
 import { Icon, type IconName } from "./Icon";
 
-/** Screen frame: ground background, safe areas, centred column (phone width on web), optional sticky footer. */
-export function Screen({ children, footer }: { children: ReactNode; footer?: ReactNode }) {
+/**
+ * Screen frame: ground background, safe areas, centred column (phone width on web), optional sticky footer.
+ * `tabbed`: the tab bar below already covers the bottom inset.
+ */
+export function Screen({ children, footer, tabbed }: { children: ReactNode; footer?: ReactNode; tabbed?: boolean }) {
   const insets = useSafeAreaInsets();
+  const bottom = tabbed ? 0 : insets.bottom;
   return (
     <View style={styles.shell}>
       <View style={styles.column}>
         <ScrollView
           contentContainerStyle={[
             styles.scroll,
-            { paddingTop: insets.top + space.xl, paddingBottom: (footer ? space.lg : insets.bottom) + 28 },
+            { paddingTop: insets.top + space.xl, paddingBottom: (footer ? space.lg : bottom) + 28 },
           ]}
           showsVerticalScrollIndicator={false}
         >
           {children}
         </ScrollView>
-        {footer ? <View style={[styles.footer, { paddingBottom: insets.bottom + space.lg }]}>{footer}</View> : null}
+        {footer ? <View style={[styles.footer, { paddingBottom: bottom + space.lg }]}>{footer}</View> : null}
       </View>
     </View>
   );
@@ -88,14 +93,17 @@ export function Button({
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ disabled }}
       disabled={disabled}
-      onPress={onPress}
+      onPress={() => {
+        if (hero && Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+        onPress();
+      }}
       style={({ pressed }) => [
         styles.button,
         { minHeight: hero ? size.heroButton : size.button },
         primary ? { backgroundColor: disabled ? color.surface3 : color.accent } : null,
         variant === "secondary" ? { backgroundColor: color.surface2 } : null,
         variant === "outline" ? { borderWidth: 1, borderColor: color.border } : null,
-        pressed && !disabled ? { opacity: 0.85, transform: [{ scale: 0.99 }] } : null,
+        pressed && !disabled ? { opacity: 0.88, transform: [{ scale: 0.97 }] } : null,
       ]}
     >
       <View style={styles.row}>
