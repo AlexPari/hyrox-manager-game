@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   STAT_IDS, autoPlay, bestFocus, decideWeek, defaultConfig, deserialize, expectedPlace, expectedRaceRating, knockChanceFor,
   newGame, nextFatigue, ovr, ovrGain, overall, playWeek, profiles, raceDay, raceIndexForWeek, raceLog, readiness, recordWeek,
-  seasonRaces, timeForRating, ratingForTime, type GameState, type Stats,
+  seasonRaces, timeForRating, ratingForTime, raceRunners, type GameEvent, type GameState, type Stats,
 } from "../src";
 
 const c = defaultConfig;
@@ -154,11 +154,47 @@ describe("save migration", () => {
     void fatigue;
     const v1 = { ...rest, version: 1, ovr: 64.5 };
     const s = deserialize(JSON.stringify(v1));
-    expect(s.version).toBe(2);
+    expect(s.version).toBe(3);
     expect(s.fatigue).toBe(0);
     expect(ovr(s)).toBeCloseTo(64.5, 6);
     s.energy = 999;
     expect(playWeek(s, { race: false }).ok).toBe(true);
+  });
+
+  it("moves a version 2 save to the fixed 10 energy week", () => {
+    const old = JSON.parse(JSON.stringify(newGame(9)));
+    old.version = 2;
+    old.config.energy = { ...old.config.energy, regenPerDay: 72 };
+    delete old.config.energy.perWeek;
+    const s = deserialize(JSON.stringify(old));
+    expect(s.version).toBe(3);
+    expect(s.config.energy.perWeek).toBe(10);
+    expect(s.config.energy.regenPerDay).toBe(24);
+  });
+});
+
+describe("live race playback", () => {
+  it("gives every runner 16 segments and keeps the real finishing order", () => {
+    const s = newGame(5);
+    s.energy = 9999;
+    s.coins = 99999;
+    let race: Extract<GameEvent, { type: "race" }> | undefined;
+    for (let w = 0; w < 12 && !race; w++) {
+      const r = playWeek(s, { race: true, pacing: "even" });
+      if (r.ok) race = r.events.find((e): e is Extract<GameEvent, { type: "race" }> => e.type === "race");
+    }
+    expect(race).toBeDefined();
+    const rr = raceRunners(s.config, race!);
+    expect(rr).toHaveLength(race!.fieldSize);
+    const me = rr.find((x) => x.id === -1)!;
+    expect(me.place).toBe(race!.place);
+    expect(me.total).toBe(race!.timeSec);
+    expect(Math.round(rr[0].total)).toBe(race!.place === 1 ? race!.timeSec : race!.winnerSec);
+    for (const x of rr) {
+      expect(x.seg).toHaveLength(16);
+      expect(x.cum[16]).toBeCloseTo(x.total, 6);
+    }
+    for (let i = 1; i < rr.length; i++) expect(rr[i].total).toBeGreaterThan(rr[i - 1].total);
   });
 });
 
