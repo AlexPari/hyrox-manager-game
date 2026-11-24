@@ -16,36 +16,21 @@ import {
   readiness,
   seasonConfig,
   trainingGains,
-  type GameState,
   type Intensity,
   type TrainingFocus,
   type WeekChoices,
 } from "@sim";
 import { Hud } from "@/components/Hud";
 import { Icon } from "@/components/Icon";
-import { Ring, readinessColor, readinessLabel } from "@/components/Ring";
+import { readinessColor, readinessLabel } from "@/components/Ring";
 import { Bar, Button, Card, Chip, Label, Row, Screen, Segmented, T } from "@/components/ui";
+import { riskLabel, weekMult } from "@/game/rules";
 import { useGame } from "@/game/store";
-import { focusInfo, intensityInfo, pacingInfo, signed, statShort } from "@/format";
+import { focusInfo, intensityInfo, signed, statShort } from "@/format";
 import { color, fatigueColor, radius, space } from "@/theme";
 
 const FOCUS: TrainingFocus[] = ["run", "engine", "strength", "hybrid", "balanced"];
 const INTENSITY: Intensity[] = ["light", "normal", "hard"];
-
-/** Training multiplier for the week, mirroring playWeek (race week, knock, injury, altitude camp, booster). */
-export function weekMult(s: GameState, racing: boolean, booster: boolean): number {
-  const c = s.config;
-  if (s.status === "injured") return 0;
-  let m = s.campWeeksLeft > 0 ? c.camps.altitude.mult : 1;
-  if (racing) m *= c.training.raceWeekGains;
-  if (s.status === "knock") m *= c.injury.knockGains;
-  if (booster) m *= c.boosts.boosterMult;
-  return m;
-}
-
-export function riskLabel(k: number): { text: string; tone: string } {
-  return k < 0.05 ? { text: "Low", tone: color.success } : k < 0.12 ? { text: "Medium", tone: color.warning } : { text: "High", tone: color.danger };
-}
 
 export default function Training() {
   const { s, play, draft, setDraft } = useGame();
@@ -68,11 +53,9 @@ export default function Training() {
   const fatigueAfter = nextFatigue(c, s.fatigue, intensity, racing, fx);
   const knock = knockChanceFor(c, fatigueAfter, fx);
   const risk = riskLabel(knock);
-  const readyAfter = readiness(s, fatigueAfter);
-  const top = STAT_IDS.map((id) => ({ id, g: gains[id] ?? 0 }))
-    .filter((x) => x.g > 0.005)
-    .sort((a, b) => b.g - a.g)
-    .slice(0, 3);
+  // Race weeks: the race is run on the fatigue carried into the week.
+  const readyAfter = Math.round(raceWeek ? readiness(s) : readiness(s, fatigueAfter));
+  const gainOvr = ovrGain(c, s.stats, input);
   const boosterCost = c.gems.booster;
   const plan: WeekChoices = { ...base, focus, intensity, booster, race: base.race ?? (raceWeek && !injured) };
   const isCoachPlan = focus === coach.focus && intensity === coach.intensity;
@@ -84,8 +67,9 @@ export default function Training() {
 
   function next() {
     if (raceWeek) {
+      // Race weeks: show the training effect, then the race plan. The week is played when the race starts.
       setDraft(plan);
-      router.push("/raceday");
+      router.push("/progress?preview=1");
       return;
     }
     const r = play({ ...plan, race: false });
@@ -94,7 +78,7 @@ export default function Training() {
       return;
     }
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
-    router.replace("/report");
+    router.replace("/progress");
   }
 
   return (
@@ -106,95 +90,35 @@ export default function Training() {
               {error}
             </T>
           ) : null}
-          <Row style={{ justifyContent: "space-between" }}>
-            <T variant="caption" tone="ink2">{`Week cost ${energyPerWeek(s)} energy`}</T>
-            <T variant="caption" tone="muted">
-              {raceWeek ? "Race decision next" : "Spent when you confirm"}
-            </T>
-          </Row>
-          <Button hero label={raceWeek ? "Continue to race day" : "Confirm week"} onPress={next} />
+          <Button hero label="Confirm week" sub={`Uses ${energyPerWeek(s)} energy${raceWeek ? " · race plan next" : ""}`} onPress={next} />
         </>
       }
     >
       <Hud back />
       <View style={{ gap: 2 }}>
-        <Label>{`Week ${week} of ${seasonConfig(s).weeks} · ${raceWeek ? "race this week" : "no race this week"}`}</Label>
-        <T variant="h1">Training</T>
+        <Label>{`Week ${week} of ${seasonConfig(s).weeks} · ${raceWeek ? "race this week" : "no race"}`}</Label>
+        <T variant="h1">{`Plan week ${week}`}</T>
       </View>
 
-      <Card>
-        <Label>{raceWeek ? "On race day" : "End of the week"}</Label>
-        <Row gap={space.lg}>
-          <Ring value={readyAfter} size={84} showLabel={false} />
-          <View style={{ flex: 1, gap: 2 }}>
-            <T variant="label" style={{ color: readinessColor(readyAfter) }}>
-              {readinessLabel(readyAfter)}
-            </T>
-            <T variant="bodyStrong">Race readiness</T>
-            <T variant="caption" tone="muted">{`Fatigue ${Math.round(s.fatigue)} → ${Math.round(fatigueAfter)}${s.status !== "fit" ? ` · ${s.status}` : ""}`}</T>
-          </View>
-        </Row>
-        <Row>
-          <View style={styles.tile}>
-            <T variant="small" tone="muted">
-              Fatigue
-            </T>
-            <T variant="numberL" style={{ color: fatigueColor(fatigueAfter) }}>
-              {Math.round(fatigueAfter)}
-            </T>
-          </View>
-          <View style={styles.tile}>
-            <T variant="small" tone="muted">
-              Injury risk
-            </T>
-            <T variant="numberL" style={{ color: risk.tone }}>
-              {risk.text}
-            </T>
-          </View>
-        </Row>
-        <T variant="caption" tone="muted">
-          {top.length ? `Gains this week: ${top.map((x) => `${statShort[x.id]} +${x.g.toFixed(2)}`).join(" · ")}` : "No training gains this week."}
-        </T>
-      </Card>
-
-      <Pressable
-        accessibilityRole="switch"
-        accessibilityState={{ checked: booster }}
-        disabled={!booster && s.gems < boosterCost}
-        onPress={() => setBooster(!booster)}
-        style={[styles.offer, booster ? { borderColor: color.gem, backgroundColor: "#16303A" } : null]}
-      >
-        <View style={styles.offerIcon}>
-          <Icon name="bolt" size={22} color={color.gem} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <T variant="bodyStrong">Training booster</T>
-          <T variant="caption" tone="muted">
-            {s.gems < boosterCost && !booster ? "Not enough gems" : `×${c.boosts.boosterMult} on every gain this week`}
+      <Pressable accessibilityRole="button" onPress={applyCoach} style={[styles.coach, isCoachPlan ? { borderColor: color.success, backgroundColor: color.surface } : null]}>
+        <View style={styles.coachAvatar}>
+          <T variant="bodyStrong" style={{ color: color.accentInk }}>
+            CO
           </T>
         </View>
-        <View style={[styles.gemPrice, booster ? { backgroundColor: color.gem } : null]}>
-          <Icon name={booster ? "check" : "gem"} size={15} color={booster ? color.accentInk : color.gem} />
-          <T variant="bodyStrong" style={{ color: booster ? color.accentInk : color.gem }}>
-            {booster ? "On" : `${boosterCost}`}
-          </T>
-        </View>
-      </Pressable>
-
-      <Pressable accessibilityRole="button" onPress={applyCoach} style={[styles.coach, isCoachPlan ? { borderColor: color.success } : null]}>
         <View style={{ flex: 1, gap: 2 }}>
-          <T variant="bodyStrong">{isCoachPlan ? "Following your coach's plan" : "Use your coach's plan"}</T>
+          <T variant="bodyStrong">{isCoachPlan ? "Following your coach's plan" : `Coach: ${focusInfo[coach.focus ?? "balanced"].label} · ${intensityInfo[coach.intensity ?? "normal"].label}`}</T>
           <T variant="caption" tone="muted">
-            {`${focusInfo[coach.focus ?? "balanced"].label} · ${intensityInfo[coach.intensity ?? "normal"].label}${raceWeek ? (coach.race ? ` · race ${pacingInfo[coach.pacing ?? "even"].label.toLowerCase()}` : " · skip the race") : ""}`}
+            {isCoachPlan ? "The biggest overall gain this week" : "Tap to use it: the biggest overall gain this week"}
           </T>
         </View>
         <Chip fg={isCoachPlan ? color.success : color.accent} bg={isCoachPlan ? color.successTint : color.accentTint}>
-          {isCoachPlan ? "On" : "Apply"}
+          {isCoachPlan ? "On" : "Use"}
         </Chip>
       </Pressable>
 
       <Card>
-        <Label>Week plan · training block</Label>
+        <Label>Training block</Label>
         <View style={styles.grid}>
           {FOCUS.map((f) => {
             const on = f === focus;
@@ -253,9 +177,14 @@ export default function Training() {
       </Card>
 
       <Card>
-        <Row style={{ justifyContent: "space-between" }}>
-          <Label>Stations</Label>
-          <T variant="small" tone="muted">{`Overall ${ovr(s).toFixed(1)}`}</T>
+        <Row style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
+          <Label>This week you get</Label>
+          <T variant="numberM">
+            {`${ovr(s).toFixed(1)} → ${(ovr(s) + gainOvr).toFixed(1)} `}
+            <T variant="numberM" style={{ color: gainOvr > 0 ? color.success : color.muted }}>
+              {signed(gainOvr, 2)}
+            </T>
+          </T>
         </Row>
         {STAT_IDS.map((id) => {
           const g = gains[id] ?? 0;
@@ -276,10 +205,50 @@ export default function Training() {
             </View>
           );
         })}
-        <T variant="caption" tone="muted">
-          Green = this week's gain (shown x6). The weakest stations improve fastest.
-        </T>
+        <Row>
+          <View style={styles.tile}>
+            <T variant="small" tone="muted">
+              {raceWeek ? "Readiness on race day" : "Readiness after"}
+            </T>
+            <T variant="numberM" style={{ color: readinessColor(readyAfter) }}>{`${readyAfter} · ${readinessLabel(readyAfter)}`}</T>
+          </View>
+          <View style={styles.tile}>
+            <T variant="small" tone="muted">
+              Knock risk
+            </T>
+            <T variant="numberM" style={{ color: risk.tone }}>
+              {risk.text}
+            </T>
+          </View>
+        </Row>
+        {raceWeek ? (
+          <T variant="caption" tone="muted">{`Race week: training counts ${Math.round(c.training.raceWeekGains * 100)}% if you race.`}</T>
+        ) : null}
       </Card>
+
+      <Pressable
+        accessibilityRole="switch"
+        accessibilityState={{ checked: booster }}
+        disabled={!booster && s.gems < boosterCost}
+        onPress={() => setBooster(!booster)}
+        style={[styles.offer, booster ? { borderColor: color.gem, backgroundColor: "#16303A" } : null]}
+      >
+        <View style={styles.offerIcon}>
+          <Icon name="bolt" size={22} color={color.gem} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <T variant="bodyStrong">Training booster</T>
+          <T variant="caption" tone="muted">
+            {s.gems < boosterCost && !booster ? "Not enough gems" : `×${c.boosts.boosterMult} on every gain this week`}
+          </T>
+        </View>
+        <View style={[styles.gemPrice, booster ? { backgroundColor: color.gem } : null]}>
+          <Icon name={booster ? "check" : "gem"} size={15} color={booster ? color.accentInk : color.gem} />
+          <T variant="bodyStrong" style={{ color: booster ? color.accentInk : color.gem }}>
+            {booster ? "On" : `${boosterCost}`}
+          </T>
+        </View>
+      </Pressable>
     </Screen>
   );
 }
@@ -307,6 +276,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: color.gem,
   },
+  coachAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: color.accent, alignItems: "center", justifyContent: "center" },
   coach: {
     flexDirection: "row",
     alignItems: "center",

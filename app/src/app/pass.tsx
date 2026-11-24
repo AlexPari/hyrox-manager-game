@@ -19,7 +19,7 @@ export default function Pass() {
     const lastPass = s.passHistory.at(-1);
     return (
       <Screen>
-        <Hud back />
+        <Hud close />
         <T variant="h1">Season pass</T>
         <Card>
           <T variant="bodyStrong">{s.season < P.unlockSeason ? `The season pass starts in season ${P.unlockSeason}.` : "The next pass starts soon."}</T>
@@ -36,7 +36,7 @@ export default function Pass() {
 
   return (
     <Screen footer={!p.premium ? <Button hero label={`Unlock premium · $${c.prices.passUsd.toFixed(2)}`} sub="Test build: simulated purchase" onPress={unlock} /> : undefined}>
-      <Hud back />
+      <Hud close />
       <View style={{ gap: 2 }}>
         <Label>{`Pass ${p.number} · ${daysLeft} day${daysLeft === 1 ? "" : "s"} left`}</Label>
         <T variant="h1">Season pass</T>

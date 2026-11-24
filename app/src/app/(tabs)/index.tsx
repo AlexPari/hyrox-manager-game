@@ -1,33 +1,49 @@
 import { Redirect, router } from "expo-router";
 import { Pressable, StyleSheet, View } from "react-native";
-import { cutInfo, decideWeek, effects, energyPerWeek, ovrGain, profileOf, profiles, readiness, seasonConfig, seasonRaces } from "@sim";
+import {
+  STAT_IDS,
+  cutInfo,
+  divisionConfig,
+  energyPerWeek,
+  expectedPlace,
+  expectedRaceRating,
+  ovr,
+  profileOf,
+  raceIndexForWeek,
+  readiness,
+  seasonConfig,
+  seasonRaces,
+} from "@sim";
 import { Hud } from "@/components/Hud";
 import { Icon } from "@/components/Icon";
 import { Ring } from "@/components/Ring";
-import { TabBar } from "@/components/TabBar";
 import { Button, Card, Chip, Divider, Label, Row, Screen, T } from "@/components/ui";
 import { flag, placeOf } from "@/data/places";
+import { useOpen } from "@/game/nav";
 import { useGame } from "@/game/store";
-import { focusInfo, intensityInfo, ordinal, signed } from "@/format";
-import { color, space } from "@/theme";
+import { ordinal, statShort } from "@/format";
+import { color, radius, space } from "@/theme";
 
 export default function Hub() {
   const { s, watchAd, skipHours, recapPending } = useGame();
+  const open = useOpen();
   if (!s.profile) return <Redirect href="/onboarding" />;
   if (recapPending) return <Redirect href="/recap" />;
   if (s.ended) return <CareerOver />;
 
   const c = s.config;
   const z = seasonConfig(s);
+  const p = profileOf(s);
+  const week = Math.min(s.week + 1, z.weeks);
   const need = energyPerWeek(s);
   const enough = s.energy >= need;
   const next = seasonRaces(s).find((r) => r.status === "next");
   const inWeeks = next ? next.week - s.week : 0;
+  const raceWeek = raceIndexForWeek(s, s.week + 1) > 0;
   const where = next ? placeOf(next.city) : null;
-  const coach = decideWeek(s, profiles.active, true);
-  const focus = coach.focus ?? "balanced";
-  const intensity = coach.intensity ?? "normal";
-  const gain = ovrGain(c, s.stats, { focus, intensity, age: s.age, effects: effects(s), mult: 1 });
+  const ready = readiness(s);
+  const sorted = [...STAT_IDS].sort((a, b) => s.stats[b] - s.stats[a]);
+  const predicted = Math.min(expectedPlace(s, expectedRaceRating(s, "even", 0)), divisionConfig(s).size);
   const ci = cutInfo(s);
   const st = ci.standings;
   const inZone = !ci.cut || ci.gap >= 0;
@@ -47,18 +63,19 @@ export default function Hub() {
         : `Bottom 3 go back to Pro. ${-ci.gap} pts to safety.`;
   const pos = st.fieldSize > 1 ? (st.rank - 1) / (st.fieldSize - 1) : 0;
   const cutPos = ci.cut && st.fieldSize > 1 ? (ci.cut - 0.5) / (st.fieldSize - 1) : 0;
+  const cta = raceWeek && next ? `Race week · ${next.worlds ? "Worlds" : next.city}` : `Plan week ${week}`;
 
   return (
     <Screen
+      tabbed
       footer={
         <>
-          <TabBar badges={{ Athlete: s.status !== "fit" ? true : undefined, Calendar: inWeeks === 1 ? true : undefined }} />
           <Button
             hero
-            label={enough ? "Continue" : "Not enough energy"}
-            sub={enough ? `Week ${s.week + 1} · uses ${need} energy` : `Needs ${need} · you have ${Math.floor(s.energy)}`}
+            label={enough ? cta : "Not enough energy"}
+            sub={enough ? `Uses ${need} energy` : `Needs ${need} · you have ${Math.floor(s.energy)}`}
             disabled={!enough}
-            onPress={() => router.push("/training")}
+            onPress={() => open("/training")}
           />
           {!enough ? (
             <Row>
@@ -80,56 +97,56 @@ export default function Hub() {
       }
     >
       <Hud />
+      <View style={{ gap: 2 }}>
+        <Label>{`Season ${s.season} · ${s.division}`}</Label>
+        <T variant="h1">{`Week ${week} of ${z.weeks}`}</T>
+      </View>
 
-      <Card tint={next?.worlds ? color.trophyTint : undefined}>
-        <Row style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
-          <View style={{ flex: 1, gap: 6 }}>
-            <Label>{`Week ${Math.min(s.week + 1, z.weeks)} of ${z.weeks} · Season ${s.season}`}</Label>
-            {next ? (
-              <Chip fg={color.accentInk} bg={color.accent}>
-                {next.worlds ? "World Championships" : `Next race · ${s.division}`}
-              </Chip>
-            ) : null}
-            <T variant="displayTitle" numberOfLines={1}>
-              {next ? (next.worlds ? "Worlds" : next.city) : "Season done"}
-            </T>
-            <T variant="bodyStrong" style={{ color: inWeeks === 1 ? color.accent : color.ink2 }}>
-              {next ? (inWeeks === 1 ? "This week" : `In ${inWeeks} weeks · week ${next.week}`) : "No race left this season"}
-            </T>
-          </View>
-          <View style={{ alignItems: "center", gap: 4 }}>
-            <Ring value={readiness(s)} size={92} />
-            <Label>Readiness</Label>
-          </View>
-        </Row>
-        {where ? (
-          <Row style={{ justifyContent: "space-between" }}>
-            <T variant="meta" tone="ink2">{`${flag(where.country)}  ${where.countryName}${where.region ? `, ${where.region}` : ""}`}</T>
-            {inWeeks === 1 ? (
-              <Pressable accessibilityRole="button" onPress={() => router.push("/pacing")} hitSlop={10}>
-                <T variant="bodyStrong" tone="accent">
-                  {"Pacing plan ›"}
-                </T>
-              </Pressable>
-            ) : null}
-          </Row>
-        ) : null}
-      </Card>
-
-      <Pressable accessibilityRole="button" onPress={() => router.push("/training")}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Open your athlete" onPress={() => router.navigate("/athlete")}>
         <Card>
-          <Row style={{ justifyContent: "space-between" }}>
-            <Label>{`Week ${s.week + 1} · Training`}</Label>
-            <T variant="bodyStrong" tone="warning">
-              {"Plan ›"}
-            </T>
+          <Row gap={space.lg}>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Label>{`${p.first} ${p.last} · ${s.age}`}</Label>
+              <T variant="displayHero" style={{ fontSize: 56, lineHeight: 56 }}>
+                {ovr(s).toFixed(0)}
+              </T>
+              <T variant="meta" tone="muted">{`Overall · strong on ${statShort[sorted[0]]}, weak on ${statShort[sorted[sorted.length - 1]]}`}</T>
+            </View>
+            <Ring value={ready} size={84} />
           </Row>
-          <T variant="bodyStrong">{`Coach suggests: ${focusInfo[focus].label} · ${intensityInfo[intensity].label}`}</T>
-          <T variant="meta" tone="muted">{`About ${signed(gain, 2)} overall · fatigue ${Math.round(s.fatigue)}%`}</T>
         </Card>
       </Pressable>
 
-      <Pressable accessibilityRole="button" onPress={() => router.push("/rankings")}>
+      {next ? (
+        <Pressable accessibilityRole="button" accessibilityLabel="Open the calendar" onPress={() => router.navigate("/calendar")}>
+          <Card tint={next.worlds ? color.trophyTint : undefined} style={inWeeks === 1 ? { borderWidth: 1.5, borderColor: color.accent } : null}>
+            <Row style={{ justifyContent: "space-between" }}>
+              <Label>{inWeeks === 1 ? "Race this week" : `Next race · in ${inWeeks} weeks`}</Label>
+              <Chip>{next.worlds ? "Championship" : s.division}</Chip>
+            </Row>
+            <T variant="displayTitle" numberOfLines={1}>
+              {next.worlds ? "Worlds" : next.city}
+            </T>
+            {where ? <T variant="meta" tone="ink2">{`${flag(where.country)}  ${where.countryName}${where.region ? `, ${where.region}` : ""} · week ${next.week}`}</T> : null}
+            <Row>
+              <View style={styles.tile}>
+                <T variant="small" tone="muted">
+                  Predicted
+                </T>
+                <T variant="numberM">{ordinal(predicted)}</T>
+              </View>
+              <View style={styles.tile}>
+                <T variant="small" tone="muted">
+                  Best 5 results
+                </T>
+                <T variant="numberM">{`${scored}/${c.ranking.bestOf} · ${st.points} pts`}</T>
+              </View>
+            </Row>
+          </Card>
+        </Pressable>
+      ) : null}
+
+      <Pressable accessibilityRole="button" onPress={() => open("/rankings")}>
         <Card>
           <Row style={{ justifyContent: "space-between" }}>
             <Label>{roadTitle}</Label>
@@ -152,20 +169,9 @@ export default function Hub() {
               <View style={[styles.dot, { left: `${pos * 100}%`, backgroundColor: inZone ? color.success : color.warning }]} />
             </View>
           ) : null}
-          <Row style={{ justifyContent: "space-between" }}>
-            <Row gap={5}>
-              <T variant="small" tone="muted">
-                Best 5
-              </T>
-              {Array.from({ length: c.ranking.bestOf }, (_, i) => (
-                <View key={i} style={[styles.slot, i < scored ? styles.slotOn : null]} />
-              ))}
-              <T variant="bodyStrong">{` ${st.points} pts`}</T>
-            </Row>
-            <T variant="meta" tone="muted">
-              {st.points ? `${ordinal(st.rank)} of ${st.fieldSize}` : "No points yet"}
-            </T>
-          </Row>
+          <T variant="meta" tone="muted">
+            {st.points ? `${ordinal(st.rank)} of ${st.fieldSize} in the ranking ›` : "No points yet ›"}
+          </T>
         </Card>
       </Pressable>
 
@@ -214,7 +220,7 @@ function CareerOver() {
   const titles = s.seasons.filter((r) => r.worlds === 1).length;
   const best = Math.max(...s.seasons.map((r) => r.ovr));
   return (
-    <Screen footer={<Button hero label="New career" onPress={newCareer} />}>
+    <Screen tabbed footer={<Button hero label="New career" onPress={newCareer} />}>
       <Hud />
       <Card tint={color.trophyTint} style={{ alignItems: "center", paddingVertical: space.xxl }}>
         <Label>{`${p.first} ${p.last} · retired at ${s.age - 1}`}</Label>
@@ -238,10 +244,9 @@ function CareerOver() {
 }
 
 const styles = StyleSheet.create({
+  tile: { flex: 1, backgroundColor: color.surface2, borderRadius: radius.md, padding: space.md, gap: 2 },
   track: { height: 22, justifyContent: "center" },
   line: { height: 6, borderRadius: 3, backgroundColor: color.surface3 },
   cut: { position: "absolute", width: 2, height: 22, marginLeft: -1, backgroundColor: color.ink2 },
   dot: { position: "absolute", width: 16, height: 16, borderRadius: 8, marginLeft: -8, borderWidth: 3, borderColor: color.surface },
-  slot: { width: 14, height: 14, borderRadius: 3, borderWidth: 1.5, borderColor: color.border },
-  slotOn: { backgroundColor: color.accent, borderColor: color.accent },
 });

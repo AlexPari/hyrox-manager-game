@@ -1,6 +1,7 @@
 import { router } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { energyCap, isVip, minutesToNextEnergy, profileOf } from "@sim";
+import { useOpen } from "@/game/nav";
 import { useGame } from "@/game/store";
 import { num } from "@/format";
 import { color, font, radius, size, type } from "@/theme";
@@ -11,22 +12,30 @@ export function initials(first: string, last: string): string {
   return `${first.trim()[0] ?? ""}${last.trim()[0] ?? ""}`.toUpperCase() || "?";
 }
 
-/** Persistent top bar: back or avatar on the left, energy, then the wallet (coins + gems, opens the shop). */
-export function Hud({ back }: { back?: boolean }) {
+/**
+ * Persistent top bar: back, close (sheets) or the avatar on the left, energy, then the wallet (coins + gems, opens
+ * the shop; does nothing when the shop is already open).
+ */
+export function Hud({ back, close }: { back?: boolean; close?: boolean }) {
   const { s } = useGame();
+  const open = useOpen();
   const cap = energyCap(s);
   const next = minutesToNextEnergy(s);
   const p = profileOf(s);
   const gold = s.pass.premium || isVip(s);
   return (
     <View accessibilityRole="summary" style={styles.bar}>
-      {back ? (
-        <IconButton icon="back" label="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} />
+      {back || close ? (
+        <IconButton
+          icon={close ? "close" : "back"}
+          label={close ? "Close" : "Back"}
+          onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))}
+        />
       ) : (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`${p.first} ${p.last}: athlete profile`}
-          onPress={() => router.push("/athlete")}
+          onPress={() => router.navigate("/athlete")}
           style={[styles.avatar, gold ? { borderWidth: 2.5, borderColor: color.gold } : null]}
         >
           <Text style={{ fontFamily: font.display, fontSize: 18, color: gold ? color.gold : color.ink }}>{initials(p.first, p.last)}</Text>
@@ -43,7 +52,7 @@ export function Hud({ back }: { back?: boolean }) {
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`${num(s.coins)} coins, ${num(s.gems)} gems. Open the shop`}
-        onPress={() => router.push("/shop")}
+        onPress={() => open("/shop")}
         style={[styles.pill, { paddingLeft: 10, paddingRight: 4 }]}
       >
         <Icon name="coin" size={15} color={color.coin} />

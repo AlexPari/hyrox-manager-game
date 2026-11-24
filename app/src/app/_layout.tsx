@@ -23,10 +23,19 @@ export default function RootLayout() {
       <StatusBar style="light" />
       <GameProvider>
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: color.ground }, animation: "slide_from_right" }}>
-          <Stack.Screen name="index" />
+          {/* Tabs (Home, Calendar, Athlete) sit at the bottom of the stack; everything else opens over them. */}
+          <Stack.Screen name="(tabs)" options={{ animation: "fade" }} />
+          {/* The week flow: Plan week → Progress → (race weeks) Race plan → Live race → Result. */}
           <Stack.Screen name="training" />
+          <Stack.Screen name="progress" />
+          <Stack.Screen name="raceplan" />
           <Stack.Screen name="race" options={{ animation: "fade", gestureEnabled: false }} />
-          <Stack.Screen name="report" options={{ animation: "fade", gestureEnabled: false }} />
+          <Stack.Screen name="result" options={{ animation: "fade", gestureEnabled: false }} />
+          <Stack.Screen name="recap" options={{ animation: "fade", gestureEnabled: false }} />
+          <Stack.Screen name="onboarding" options={{ animation: "fade" }} />
+          {/* Sheets: one tap closes them, opening one from another swaps them (see useOpen). */}
+          <Stack.Screen name="shop" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
+          <Stack.Screen name="pass" options={{ presentation: "modal", animation: "slide_from_bottom" }} />
         </Stack>
       </GameProvider>
     </SafeAreaProvider>

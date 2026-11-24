@@ -1,5 +1,4 @@
-import { router } from "expo-router";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { cutInfo, placeRewards, seasonConfig, seasonRaces } from "@sim";
 import { Hud } from "@/components/Hud";
 import { Icon } from "@/components/Icon";
@@ -18,13 +17,13 @@ export default function Calendar() {
   const ci = cutInfo(s);
   const pts = c.ranking.points;
   return (
-    <Screen>
-      <Hud back />
+    <Screen tabbed>
+      <Hud />
       <View style={{ gap: 2 }}>
         <Label>{`Season ${s.season} · ${s.division} · ${seasonConfig(s).weeks} weeks`}</Label>
         <T variant="h1">Calendar</T>
         <T variant="meta" tone="muted">
-          {`${left} race${left === 1 ? "" : "s"} left${next ? ` · next: ${next.worlds ? "Worlds" : next.city}, ${next.week - s.week === 1 ? "this week" : `in ${next.week - s.week} weeks`}` : ""}`}
+          {`${left} race${left === 1 ? "" : "s"} left${next ? ` · next: ${next.worlds ? "Worlds" : next.city}, ${next.week - s.week === 1 ? "this week" : `in ${next.week - s.week} weeks`}` : ""}. You set each race plan in race week, after confirming your training.`}
         </T>
       </View>
       <Card style={{ gap: 6 }}>
@@ -44,12 +43,7 @@ export default function Calendar() {
         const best = placeRewards(s, 1, r.worlds);
         const isNext = r.status === "next";
         return (
-          <Pressable
-            key={r.week}
-            accessibilityRole={isNext ? "button" : undefined}
-            disabled={!isNext}
-            onPress={() => router.push("/pacing")}
-          >
+          <View key={r.week}>
             <Card
               tint={r.worlds ? color.trophyTint : undefined}
               style={[{ paddingVertical: space.lg }, isNext ? { borderWidth: 1.5, borderColor: color.accent } : null, r.status === "skipped" ? { opacity: 0.55 } : null]}
@@ -85,7 +79,7 @@ export default function Calendar() {
                 </View>
               </Row>
             </Card>
-          </Pressable>
+          </View>
         );
       })}
     </Screen>

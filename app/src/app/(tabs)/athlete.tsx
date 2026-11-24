@@ -27,7 +27,8 @@ import { useGame } from "@/game/store";
 import { effectsText, facilityName, gearName, staffName, tierName } from "@/names";
 import { num, ordinal, raceTime, statLabel, statShort } from "@/format";
 import { color, fatigueColor, radius, space } from "@/theme";
-import { riskLabel } from "./training";
+import { useOpen } from "@/game/nav";
+import { errorText, riskLabel } from "@/game/rules";
 
 function confirmAction(title: string, message: string, onYes: () => void) {
   if (Platform.OS === "web") {
@@ -41,26 +42,9 @@ function confirmAction(title: string, message: string, onYes: () => void) {
   ]);
 }
 
-export function errorText(r: ActionResult): string | null {
-  if (r.ok) return null;
-  switch (r.error) {
-    case "notEnoughCoins":
-      return "Not enough coins.";
-    case "notEnoughGems":
-      return "Not enough gems.";
-    case "locked":
-      return "Not unlocked yet.";
-    case "alreadyOwned":
-      return "Already owned.";
-    case "limitReached":
-      return "Limit reached for today.";
-    default:
-      return "Not available right now.";
-  }
-}
-
 export default function Athlete() {
   const { s, run, newCareer } = useGame();
+  const open = useOpen();
   const [msg, setMsg] = useState<string | null>(null);
   const c = s.config;
   const p = profileOf(s);
@@ -86,12 +70,21 @@ export default function Athlete() {
   const act = (fn: Parameters<typeof run>[0]) => setMsg(errorText(run(fn) as ActionResult));
 
   return (
-    <Screen>
-      <Hud back />
+    <Screen tabbed>
+      <Hud />
       <View style={{ gap: 2 }}>
         <Label>{`${s.division} · season ${s.season}`}</Label>
         <T variant="h1">Athlete</T>
       </View>
+
+      <Row>
+        <View style={{ flex: 1 }}>
+          <Button variant="secondary" icon="rank" label="Rankings" onPress={() => open("/rankings")} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Button variant="secondary" icon="badge" label="Wall of fame" onPress={() => open("/wall")} />
+        </View>
+      </Row>
 
       <Card>
         <Row gap={space.lg}>
@@ -296,7 +289,7 @@ export default function Athlete() {
       <Card>
         <Row style={{ justifyContent: "space-between" }}>
           <Label>Gear</Label>
-          <Pressable accessibilityRole="button" onPress={() => router.push("/shop")} hitSlop={8}>
+          <Pressable accessibilityRole="button" onPress={() => open("/shop")} hitSlop={8}>
             <T variant="bodyStrong" tone="accent">
               {"Shop ›"}
             </T>

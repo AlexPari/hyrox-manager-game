@@ -2,7 +2,7 @@ import { Redirect, router } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import type { GameEvent } from "@sim";
-import { Bar, Button, Card, Chip, Label, Row, Screen, T } from "@/components/ui";
+import { Bar, Button, Card, Chip, Label, Row, Screen, Segmented, T } from "@/components/ui";
 import { useGame } from "@/game/store";
 import { raceSegments } from "@/game/raceSegments";
 import { ordinal, pacingInfo, raceTime } from "@/format";
@@ -10,7 +10,9 @@ import { color, space } from "@/theme";
 
 type RaceEvent = Extract<GameEvent, { type: "race" }>;
 
-const PLAYBACK_MS = 12_000;
+/** Real seconds for the whole race at 1×. The track view with the full field comes later. */
+const PLAYBACK_MS = 45_000;
+const SPEEDS = [1, 2, 4] as const;
 export default function Race() {
   const { last } = useGame();
   const race = last?.events.find((e): e is RaceEvent => e.type === "race");
@@ -22,17 +24,21 @@ function Playback({ race }: { race: RaceEvent }) {
   const segments = useMemo(() => raceSegments(race.splits), [race]);
   const total = segments.reduce((t, x) => t + x.sec, 0);
   const [elapsed, setElapsed] = useState(0);
-  const start = useRef(Date.now());
+  const [speed, setSpeed] = useState<(typeof SPEEDS)[number]>(1);
+  const lastTick = useRef(Date.now());
   const done = elapsed >= total;
 
   useEffect(() => {
     if (done) return;
+    lastTick.current = Date.now();
     const timer = setInterval(() => {
-      const t = ((Date.now() - start.current) / PLAYBACK_MS) * total;
-      setElapsed(Math.min(total, t));
+      const now = Date.now();
+      const dt = now - lastTick.current;
+      lastTick.current = now;
+      setElapsed((e) => Math.min(total, e + (dt / PLAYBACK_MS) * total * speed));
     }, 50);
     return () => clearInterval(timer);
-  }, [done, total]);
+  }, [done, total, speed]);
 
   let acc = 0;
   let current = segments.length - 1;
@@ -55,9 +61,21 @@ function Playback({ race }: { race: RaceEvent }) {
     <Screen
       footer={
         done ? (
-          <Button hero label="See result" onPress={() => router.replace("/patch")} />
+          <Button hero label="See result" onPress={() => router.replace("/result")} />
         ) : (
-          <Button variant="secondary" icon="skip" label="Skip to finish" onPress={() => setElapsed(total)} />
+          <Row>
+            <View style={{ flex: 1 }}>
+              <Segmented
+                label="Playback speed"
+                value={String(speed)}
+                onChange={(v) => setSpeed(Number(v) as (typeof SPEEDS)[number])}
+                options={SPEEDS.map((x) => ({ key: String(x), label: `${x}×` }))}
+              />
+            </View>
+            <View style={{ width: 110 }}>
+              <Button variant="outline" icon="skip" label="Skip" onPress={() => setElapsed(total)} />
+            </View>
+          </Row>
         )
       }
     >
