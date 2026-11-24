@@ -1,7 +1,7 @@
 import { STAT_IDS, defaultConfig } from "./config";
 import type { GameState } from "./types";
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 /** Saves are plain JSON. Each future format change adds a migration step below so old saves keep working. */
 export function serialize(s: GameState): string {
@@ -18,6 +18,11 @@ const migrations: Record<number, (save: AnySave) => AnySave> = {
     const injuryWeeksLeft = rest.status === "knock" ? defaultConfig.injury.knockWeeks : rest.injuryWeeksLeft;
     // v1 saves always used the default config; the v2 defaults add the new model's numbers.
     return { ...rest, version: 2, config: JSON.parse(JSON.stringify(defaultConfig)), stats, fatigue: 0, injuryWeeksLeft };
+  },
+  // v2 -> v3: a week costs a fixed 10 energy (races free) and energy refills at 1 per hour.
+  2: (save) => {
+    const config = save.config as { energy: Record<string, number> };
+    return { ...save, version: 3, config: { ...config, energy: { ...config.energy, perWeek: defaultConfig.energy.perWeek, regenPerDay: defaultConfig.energy.regenPerDay } } };
   },
 };
 
